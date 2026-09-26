@@ -1,0 +1,99 @@
+/* Render del plano (SVG). Se amplía en el hito M4 con la mesa de trabajo completa. */
+.plan {
+  position: relative;
+  background-color: var(--panel);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 20px 20px;
+  background-position: -1px -1px;
+  border: 2px solid var(--wall);
+  touch-action: manipulation;
+}
+.plan svg.map {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.room {
+  fill: var(--room);
+  stroke: var(--wall);
+  stroke-width: 2.5;
+}
+.door {
+  fill: var(--room);
+}
+.jamb {
+  stroke: var(--wall);
+  stroke-width: 2;
+}
+.rlab {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 17px;
+  fill: var(--ink);
+  letter-spacing: 0.01em;
+}
+.ficon {
+  color: var(--ink-2);
+}
+.hit {
+  fill: transparent;
+  cursor: pointer;
+}
+.hit:focus-visible {
+  outline: none;
+  stroke: var(--focus);
+  stroke-width: 3;
+}
+.crime {
+  fill: none;
+  stroke: var(--pencil);
+  stroke-width: 2.5;
+  stroke-dasharray: 7 5;
+}
+.victim circle {
+  fill: none;
+  stroke: var(--pencil);
+  stroke-width: 2;
+}
+.victim path {
+  stroke: var(--pencil);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+.tok {
+  transition: transform 0.7s cubic-bezier(0.45, 0.05, 0.25, 1);
+}
+.tok text,
+.mk text {
+  font-family: var(--body);
+  font-weight: 700;
+  font-size: 12px;
+  text-anchor: middle;
+  dominant-baseline: central;
+  fill: #fff;
+  pointer-events: none;
+}
+.mk.no circle {
+  fill: var(--room) !important;
+  stroke-width: 2;
+}
+.mk.no text {
+  fill: var(--ink-2);
+}
+.mk.no line {
+  stroke: var(--pencil);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+.hlroom {
+  fill: none;
+  stroke: var(--blue);
+  stroke-width: 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tok {
+    transition: none;
+  }
+}

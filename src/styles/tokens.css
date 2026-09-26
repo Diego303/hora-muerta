@@ -1,0 +1,57 @@
+/* Identidad visual: plano de arquitecto nocturno. Papel azulado en claro, cianotipo en oscuro. */
+:root {
+  --paper: #e4eaed;
+  --panel: #f2f5f6;
+  --room: #f9fbfc;
+  --ink: #15222c;
+  --ink-2: #4c5d69;
+  --grid: #c7d4db;
+  --wall: #1d3446;
+  --pencil: #b3261e;
+  --on-pencil: #fff;
+  --blue: #2a64c8;
+  --amber: #b87d0c;
+  --focus: #2a64c8;
+
+  --display: 'Big Shoulders Display', 'Arial Narrow', 'Roboto Condensed', Impact, sans-serif;
+  --body: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --paper: #0d2a45;
+    --panel: #10324f;
+    --room: #133a5c;
+    --ink: #e8f2f8;
+    --ink-2: #a7c1d4;
+    --grid: #1c4a70;
+    --wall: #d6e8f4;
+    --pencil: #ff8a78;
+    --on-pencil: #2a0d09;
+    --blue: #8cc4ff;
+    --amber: #f2c14e;
+    --focus: #8cc4ff;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --paper: #0d2a45;
+  --panel: #10324f;
+  --room: #133a5c;
+  --ink: #e8f2f8;
+  --ink-2: #a7c1d4;
+  --grid: #1c4a70;
+  --wall: #d6e8f4;
+  --pencil: #ff8a78;
+  --on-pencil: #2a0d09;
+  --blue: #8cc4ff;
+  --amber: #f2c14e;
+  --focus: #8cc4ff;
+  color-scheme: dark;
+}

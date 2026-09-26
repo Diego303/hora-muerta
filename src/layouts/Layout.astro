@@ -1,0 +1,117 @@
+---
+import '../styles/tokens.css';
+import '../styles/base.css';
+import '../styles/landing.css';
+import '../styles/game.css';
+
+interface Props {
+  title?: string;
+}
+
+const { title = 'Hora Muerta — deducción sobre plano' } = Astro.props;
+const base = import.meta.env.BASE_URL;
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    <meta
+      name="description"
+      content="Juego de deducción lógica sobre planos: sigue a los sospechosos hora a hora y descubre quién estuvo a solas con la víctima. Cada caso se comprueba para que tenga una única solución."
+    />
+    <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+    <link rel="icon" href={`${base}favicon.ico`} />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Big+Shoulders+Display:wght@600;800&display=swap"
+      rel="stylesheet"
+    />
+    <script is:inline>
+      // Aplica el tema guardado antes del primer pintado, para no dar un parpadeo
+      // entre el tema del sistema y el elegido en Ajustes.
+      try {
+        var raw = localStorage.getItem('hm2:settings');
+        var theme = raw ? JSON.parse(raw).theme : null;
+        if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {
+        /* modo privado o localStorage no disponible: se queda con el tema del sistema */
+      }
+    </script>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <symbol id="ic-fire" viewBox="0 0 16 16"
+        ><path fill="currentColor" d="M8 .8c.6 2.6 4.4 3.9 4.4 8.2A4.4 4.4 0 0 1 3.6 9c0-2 1-3.3 2.2-4.2-.1 1.8.6 3 1.8 3.4C6.9 5.7 7.6 3 8 .8z"
+        ></path></symbol
+      >
+      <symbol id="ic-window" viewBox="0 0 16 16"
+        ><g fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="2.5" width="11" height="11"></rect><path
+            d="M8 2.5v11M2.5 8h11"
+          ></path></g></symbol
+      >
+      <symbol id="ic-bed" viewBox="0 0 16 16"
+        ><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+          ><path d="M1.5 13V4M1.5 9.5h13V13M14.5 9.5V8a2 2 0 0 0-2-2h-5v3.5"></path><circle cx="4.5" cy="7.3" r="1.3"
+          ></circle></g></symbol
+      >
+      <symbol id="ic-case" viewBox="0 0 16 16"
+        ><g fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="2.5" width="11" height="11"></rect><path
+            d="M8 5l3 3-3 3-3-3z"
+          ></path></g></symbol
+      >
+      <symbol id="ic-sky" viewBox="0 0 16 16"
+        ><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+          ><circle cx="8" cy="8" r="2.8"></circle><path
+            d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1"
+          ></path></g></symbol
+      >
+      <symbol id="ic-balcony" viewBox="0 0 16 16"
+        ><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+          ><path d="M2 6.5h12M2 6.5V13M14 6.5V13M2 13h12"></path><path
+            d="M4.5 6.5V4.2M7 6.5V4.2M9.5 6.5V4.2M12 6.5V4.2"
+            stroke-width="1.2"
+          ></path></g></symbol
+      >
+      <symbol id="ic-wave" viewBox="0 0 16 16"
+        ><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+          ><path d="M1.5 6.5c1.4-1.6 2.9-1.6 4.3 0s2.9 1.6 4.3 0 2.9-1.6 4.4 0"></path><path
+            d="M1.5 10.8c1.4-1.6 2.9-1.6 4.3 0s2.9 1.6 4.3 0 2.9-1.6 4.4 0"
+          ></path></g></symbol
+      >
+      <symbol id="ic-porthole" viewBox="0 0 16 16"
+        ><g fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6"></circle><circle
+            cx="8"
+            cy="8"
+            r="3.1"
+          ></circle></g></symbol
+      >
+      <symbol id="ic-stage" viewBox="0 0 16 16"
+        ><g fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1.5 2.5h13v11h-13z"></path><path
+            d="M1.5 2.5c1.6 2.6 1.6 8.4 0 11M14.5 2.5c-1.6 2.6-1.6 8.4 0 11"
+          ></path></g></symbol
+      >
+      <symbol id="ic-mirror" viewBox="0 0 16 16"
+        ><g fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="8" cy="7" rx="5" ry="5.5"></ellipse><path
+            d="M5.6 9.4c.5.6 1.2.9 1.9.5"
+            stroke-width="1.2"
+          ></path></g></symbol
+      >
+      <symbol id="ic-victim" viewBox="0 0 16 16"
+        ><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+          ><circle cx="8" cy="8" r="6.5"></circle><path d="M8 4.5v7M5.5 7h5"></path></g></symbol
+      >
+      <symbol id="ic-door" viewBox="0 0 16 16"
+        ><g fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1 8h4M11 8h4"></path><path
+            d="M5 5v6M11 5v6"
+            stroke-width="1.2"
+          ></path></g></symbol
+      >
+    </svg>
+    <slot />
+  </body>
+</html>

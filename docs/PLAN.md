@@ -1,0 +1,215 @@
+# Hora Muerta v2 — plan de trabajo
+
+> Estado del proyecto y hoja de ruta por hitos. Se actualiza al cerrar cada hito (casillas, fecha, notas). Fuente de verdad del diseño: `docs/DISENO_TECNICO.md`. Decisiones ante ambigüedades: `docs/DECISIONES.md` (se crea en M0).
+
+## 0. Resultado del Paso 0
+
+Repositorio explorado: proyecto Astro 5.17 recién creado a partir de la plantilla oficial (`src/pages/index.astro` + `Welcome.astro` de ejemplo), sin motor de juego, sin pruebas, sin lint. `astro.config.mjs` ya fija `site: "https://Diego303.github.io"` y `base: "/hora-muerta/"` (GitHub Pages, project page). Hay un workflow `.github/workflows/astro.yaml` que despliega a Pages con `withastro/action@v2` forzando `package-manager: pnpm@9`; se deja sin tocar. Entorno de este sandbox: Node.js no está instalado y, por petición del usuario, no se instala ni se ejecuta nada aquí (ver "Modo de trabajo" más abajo); el usuario instala, arranca y prueba en otro entorno con Node y pnpm.
+
+No hay framework de UI (React/Vue/etc.) instalado ni previsto: Astro se usa solo como generador de sitio estático y servidor de desarrollo.
+
+---
+
+## 1. Decisión de integración y motivo
+
+**Opción (b) del prompt maestro: ruta de solo cliente dentro de Astro.**
+
+- `src/pages/index.astro` es la única página del sitio y monta el juego completo (portada + mesa de trabajo) en un contenedor `<div id="app">` vacío. No se reescribe el juego con componentes de Astro/React: toda la lógica de pantallas vive en `src/ui/*.ts` (vanilla TS + DOM), igual que v1 pero organizada según la sección 19.2 del diseño.
+- Motivo: el diseño exige `src/engine` sin DOM (usable en navegador, Web Worker y Node) y una pizarra con render SVG/canvas hecho a mano; un framework de componentes no aporta nada aquí y complicaría el Web Worker y los scripts de banco (que deben poder `import` el motor tal cual). Mantener una sola ruta estática evita duplicar la navegación tipo SPA que ya tiene v1 (portada/juego por `hidden` + hash) en el sistema de rutas de Astro.
+- `Layout.astro` se conserva como layout base (`<head>`: charset, viewport con `viewport-fit=cover`, preconnect a Google Fonts, `manifest.webmanifest` desde M9, `data-theme`) y pasa a álojar los símbolos SVG de iconos compartidos.
+- Se eliminan en M0 los sobrantes de la plantilla: `src/components/Welcome.astro`, `src/assets/astro.svg`, `src/assets/background.svg`.
+- El banco de casos (`public/cases/*.json`, generado offline por `bank:build`) vive en `public/` de Astro y se sirve tal cual; todo acceso a rutas absolutas de `public/` (banco, manifest PWA, iconos, favicons) usa `import.meta.env.BASE_URL` para funcionar bajo `/hora-muerta/` tanto en `astro dev` como en producción.
+- El Web Worker del modo infinito se crea con `new Worker(new URL('../workers/generator.worker.ts', import.meta.url), { type: 'module' })`, patrón nativo de Vite/Astro, sin plugin adicional.
+- Los scripts del banco (`scripts/*.ts`) son independientes del build de Astro: se ejecutan con `tsx` en Node y usan `worker_threads` para paralelizar; importan `src/engine/*` directamente porque no depende del DOM.
+
+**Decisión de gestor de paquetes: pnpm** (confirmado por el usuario). El workflow `.github/workflows/astro.yaml` ya fuerza `pnpm@9` y se deja tal cual, sin tocarlo. "Scripts npm" en el encargo se cumple como el campo `scripts` de `package.json`, ejecutable con `pnpm run <script>`. Ver `docs/DECISIONES.md`.
+
+**Modo de trabajo de este entorno:** por petición del usuario, en este sandbox no se instala Node.js ni se ejecuta `pnpm install`/`dev`/`build`/`test`. Aquí solo se escribe y revisa código; el usuario lo instala, arranca y prueba en otro entorno con Node y pnpm. Cada hito se entrega con instrucciones exactas de verificación (`pnpm install && pnpm typecheck && pnpm lint && pnpm test`, y `pnpm dev`) para que el usuario las ejecute allí.
+
+---
+
+## 2. Estructura de carpetas final
+
+```
+src/
+  engine/                    # sin DOM: navegador, Web Worker y Node
+    rng.ts                   # mulberry32, fnv1a, shuffle, pick
+    content/maps.ts          # 6 MapDef (Apéndice A)
+    content/cast.ts          # reparto, colores, víctimas, objetos, motivos (Apéndice A/§4)
+    graph.ts                 # adj, adjM, feat, dist
+    paths.ts                 # enumeración de recorridos por T
+    truth.ts                 # generación de la noche y sesgos (§7.2)
+    clues.ts                 # holds(), reserva, prohibiciones, topes, orden (§6)
+    exact.ts                 # solver exacto (§8, portado de v1)
+    human.ts                 # solver humano: niveles, pasos, cadena crítica, puntuación (§9)
+    archetypes.ts             # deducción clave y etiquetas (§10)
+    generate.ts               # generarCaso() (§7.1)
+    text.ts                   # textos de pistas y pasos (Apéndices B y C)
+    types.ts                  # tipos de la sección 5
+  game/
+    store.ts                  # estado + acciones + suscripción + deshacer
+    storage.ts                 # hm2:* con try/catch y migración desde hm:
+    bank.ts                     # manifest, carga bajo demanda, orden personal, jugados (§12.5)
+    modes.ts                     # suelto, diario, expediente, infinito (§13)
+    hints.ts                      # pista del inspector (§15)
+    scoring.ts                     # estrellas, errores, cierre (§14)
+    progression.ts                  # rango, desbloqueos, archivo (§16)
+  ui/
+    landing.ts  demo.ts  selector.ts  board.ts  plan.ts  chalk.ts
+    sheet.ts  clues.ts  objects.ts  casetab.ts  accuse.ts  closure.ts
+    reconstruct.ts  settings.ts  profile.ts  help.ts  toast.ts  a11y.ts
+  styles/
+    tokens.css  base.css  landing.css  game.css  sheet.css
+  workers/
+    generator.worker.ts
+  main.ts                       # arranque, router simple por hash/estado
+  pages/
+    index.astro                  # <div id="app">, <div id="layer">, <script>import '../main.ts'</script>
+  layouts/
+    Layout.astro                  # head, fuentes, símbolos SVG compartidos, tema
+scripts/
+  build-bank.ts    validate-bank.ts    bank-report.ts    bank.config.ts
+public/
+  cases/                              # generado: manifest.json, novato.json, inspector.json, comisario.json, diario.json, expedientes.json
+  manifest.webmanifest                # M9
+  icons/                              # M9
+  favicon.svg  favicon.ico            # ya existen
+tests/
+  engine/*.test.ts
+  bank/*.test.ts
+  e2e/*.spec.ts
+reports/
+  bank-report.md                      # generado por bank:report, versionado
+docs/
+  DISENO_TECNICO.md
+  PLAN.md
+  DECISIONES.md                       # nuevo, se crea en M0
+  referencia/hora-muerta-v1.html
+astro.config.mjs
+eslint.config.js
+tsconfig.json                          # app (Astro/Vite), extiende astro/tsconfigs/strict
+tsconfig.node.json                     # scripts/ y tests/, resolución NodeNext
+vitest.config.ts
+playwright.config.ts
+package.json
+```
+
+Se eliminan: `src/components/Welcome.astro`, `src/assets/astro.svg`, `src/assets/background.svg`.
+
+---
+
+## 3. Dependencias exactas
+
+Sin dependencias de producción nuevas (el juego es TS + DOM vanilla; Astro solo sirve el HTML/CSS/JS estático). Todo lo demás es `devDependencies`:
+
+| Paquete | Uso |
+|---|---|
+| `astro` | ya presente (^5.17.1); generador del sitio estático |
+| `typescript` | compilador, modo strict |
+| `vitest` | pruebas unitarias del motor y del banco |
+| `@playwright/test` | humo e2e y capturas en 3 tamaños / 2 temas |
+| `tsx` | ejecutar `scripts/*.ts` (Node + ESM + `worker_threads`) sin paso de build |
+| `eslint` | lint (config plana, ESLint 9) |
+| `typescript-eslint` | reglas TS estrictas, incluida `no-explicit-any` |
+| `eslint-plugin-astro` + `astro-eslint-parser` | lint de `src/pages/*.astro` y `src/layouts/*.astro` |
+
+PWA (M9): decisión pendiente entre Service Worker escrito a mano (sin dependencia nueva, más control sobre el cacheo de `public/cases/*.json`) o `@vite-pwa/astro`. Por defecto **a mano**, coherente con "sin dependencia adicional salvo necesidad clara"; se revisa al llegar a M9 y se anota en `DECISIONES.md` si cambia.
+
+---
+
+## 4. Scripts npm
+
+```json
+{
+  "dev": "astro dev",
+  "build": "astro build",
+  "preview": "astro preview",
+  "typecheck": "astro check && tsc --noEmit -p tsconfig.node.json",
+  "lint": "eslint .",
+  "test": "vitest run",
+  "test:e2e": "playwright test",
+  "bank:build": "tsx scripts/build-bank.ts",
+  "bank:validate": "tsx scripts/validate-bank.ts",
+  "bank:report": "tsx scripts/bank-report.ts"
+}
+```
+
+---
+
+## 5. Hitos M0–M9
+
+Un hito por sesión. Al cerrar cada uno: `pnpm typecheck && pnpm lint && pnpm test` (y `pnpm test:e2e` desde M4), marcar casillas abajo, commit con mensaje `M<n>: <resumen>` (sin push).
+
+### M0 — Proyecto
+**Tareas:** `package.json` con los scripts de la sección 4 (pnpm); `tsconfig.json` (app) + `tsconfig.node.json` (scripts) + `tsconfig.test.json` (tests); ESLint plano con TS estricto (sin plugin de Astro: `astro check` cubre los `.astro`); Vitest y Playwright configurados; arregladas las rutas absolutas de favicons para respetar `base` vía `import.meta.env.BASE_URL`; tokens de color (claro/oscuro), tipografías (Google Fonts) y utilidades base portados a `src/styles/`; `src/engine/types.ts` (modelo de datos completo, §5), `src/engine/content/cast.ts` (reparto, víctimas, objetos, motivos completos, §4.2–4.3) y `src/engine/content/maps.ts` (solo Casa Valdemar; los otros 5 mapas se añaden en M1 con su validación geométrica); portada de v1 portada a `src/ui/landing.ts` + `src/ui/demo.ts` + `src/ui/plan.ts` (render SVG del plano), con un caso de ejemplo escrito a mano para animar el plano (el generador real llega en M1); plantilla por defecto de Astro eliminada; `docs/DECISIONES.md` creado.
+**Hecho cuando (a verificar por el usuario, ver §6 "Nada se ejecuta en este entorno"):** `pnpm install && pnpm build` sin errores; `pnpm dev` sirve la portada y se ve igual que v1 en 360 px y en escritorio; `pnpm typecheck` y `pnpm lint` pasan; `pnpm test` pasa (una prueba real de `game/storage.ts`); commit `M0: proyecto y portada`.
+
+### M1 — Motor base
+**Tareas:** `src/engine/rng.ts` (mulberry32 + fnv1a, portados de v1); `content/maps.ts` con los 6 `MapDef` del Apéndice A (mansión, tren, museo, hotel, barco, teatro); `content/cast.ts` con los 18 sospechosos, 12 víctimas, 10 objetos y 12 motivos de la sección 4; `graph.ts`, `paths.ts`; `truth.ts` (noche + sesgos de arquetipo); `clues.ts` con los 16 tipos (incluye `moved`/`still`), prohibiciones (§6.2) y topes (§6.3); `text.ts` con las plantillas exactas del Apéndice B; `exact.ts` portado de `exists`/`checkUnique` de v1, ampliado con `moved`/`still` como restricciones unarias.
+**Hecho cuando:** pruebas `holds()` por cada uno de los 16 tipos; solver exacto igual a fuerza bruta en 30 casos Novato; determinismo por semilla (mismo caso byte a byte); validación geométrica de los 6 mapas (sin solapes, puertas sobre pared compartida salvo pasarela del tren, grafos conexos); script de consola que imprime un caso con sus pistas en texto.
+
+### M2 — Solver humano
+**Tareas:** `human.ts`: estado por máscaras de bits (`poss`, `carry`, `cand`), reglas de niveles 1–6 (§9.2), bucle de "regla más sencilla que avance" (§9.3), `Step` con premisas y cadena crítica por dependencias hacia atrás (§9.4), puntuación (§9.5); `archetypes.ts`: deducción clave y los 7 arquetipos (§10).
+**Hecho cuando:** solidez en 300 casos generados (toda conclusión de todo paso es verdadera en `truth`); coherencia con el solver exacto; el ejemplo del Apéndice D reproduce exactamente la cadena de 11 pasos descrita; textos del Apéndice C para cada regla usada.
+
+### M3 — Generador y banco
+**Tareas:** `generate.ts` con la tubería completa de la sección 7 (selección guiada por contraejemplos con temperatura, minimización, topes, lectura máxima, pista de cortesía en Novato); `scripts/bank.config.ts` con la composición de 12.1 (600 por defecto, configurable, mínimo 200); `scripts/build-bank.ts` en paralelo con `worker_threads`; `scripts/validate-bank.ts` (unicidad, solver humano dentro de nivel, topes, lectura, firma única, formato — código de salida ≠ 0 si falla, listo para CI); `scripts/bank-report.ts` (histogramas y `reports/bank-report.md`).
+**Hecho cuando:** `bank:validate` pasa sin errores sobre el banco generado; cuotas de variedad cumplidas (mapas, arquetipos, hora del crimen, tercios de puntuación); informe en `reports/bank-report.md`; cada archivo de `public/cases/` ≤ 150 KB comprimido.
+
+### M4 — Mesa de trabajo
+**Tareas:** layout responsive de 17.3 (móvil vertical, móvil horizontal/tableta, escritorio) en `src/styles/game.css`; `ui/plan.ts` (render SVG portado de `buildPlan`, con estela y ayuda de movimiento nuevas de 17.4); `ui/chalk.ts` (canvas de tiza, 17.5); `ui/board.ts` orquesta pestañas de hora, barra de herramientas, hoja inferior de dos estados, ampliar plano, deshacer común.
+**Hecho cuando:** se juega (marcar, cambiar hora, tiza) un caso real del banco en 390×844 sin scroll horizontal del `body` y con todos los controles alcanzables con el pulgar; primeras capturas Playwright en 390×844, 844×390 y 1280×800.
+
+### M5 — Bucle completo
+**Tareas:** `ui/clues.ts` (tachar, enfocar, agrupado por categoría), `ui/objects.ts` (tabla con autocompletar), `ui/casetab.ts` (informe + descartar), `ui/accuse.ts` (hoja de acusación), `game/scoring.ts` (estrellas, límite de 2 errores, cierre), `ui/closure.ts` (frase, deducción clave, cadena desplegable), `ui/reconstruct.ts` (animación de fichas con `prefers-reduced-motion`), siguiente caso instantáneo desde el banco.
+**Hecho cuando:** bucle jugable de principio a fin sobre un caso del banco; prueba e2e que resuelve un caso usando la solución del JSON.
+
+### M6 — Pista del inspector
+**Tareas:** `game/hints.ts`: revisión de marcas contradictorias (fase 1), siguiente paso no reflejado de la cadena crítica, empujón (coste 1 estrella) y explicación (gratis) según 15.1–15.4; resaltados en el plano; integración con `board.ts`.
+**Hecho cuando:** pruebas unitarias del mapeo conclusión → marca reflejada (incluidos pasos intermedios no marcables); coste de estrellas correcto.
+
+### M7 — Modos
+**Tareas:** `game/bank.ts` (orden personal por semilla, lista de jugados, agotamiento de grupo), `game/modes.ts` (caso suelto, caso en curso, enlaces `#caso=`/`#gen=`, caso del día por índice de fecha, expediente de 3 con errores compartidos, modo infinito en `workers/generator.worker.ts` con pregeneración, presupuesto de 8 s).
+**Hecho cuando:** agotamiento de un grupo probado con un banco de prueba pequeño; enlaces abren el caso correcto; modo infinito genera en el worker sin bloquear el hilo principal.
+
+### M8 — Progresión
+**Tareas:** `game/progression.ts` (rango por estrellas, desbloqueo de escenarios, archivo de arquetipos, estadísticas), `ui/settings.ts`, `ui/profile.ts`, `game/storage.ts` con claves `hm2:*` y migración desde `hm:stats`/`hm:daily` de v1.
+**Hecho cuando:** pruebas de migración desde v1 y de comportamiento con `localStorage` bloqueado (modo privado).
+
+### M9 — Calidad
+**Tareas:** PWA (manifest + iconos + Service Worker que cachea app y banco, con scope `/hora-muerta/`), presupuestos de rendimiento de 19.4, auditoría de accesibilidad (17.9: roles, `aria-label` dinámico, teclado, foco visible, `prefers-reduced-motion`), pruebas e2e y capturas en los tres tamaños en tema claro y oscuro.
+**Hecho cuando:** criterios de aceptación de la sección 20 completos; juego usable sin conexión tras la primera carga.
+
+---
+
+## 6. Riesgos
+
+- **Nada se ejecuta en este entorno.** Por petición del usuario, aquí no se instala Node ni se corre `pnpm install`/`dev`/`build`/`typecheck`/`lint`/`test`. Todo el código se revisa a mano (tipos, imports, geometría) sin poder compilarlo en esta sesión; el usuario debe ejecutar `pnpm install && pnpm typecheck && pnpm lint && pnpm test` en su propio entorno antes de dar un hito por bueno, y avisar de cualquier error para corregirlo en la sesión siguiente.
+- **Solver humano (M2) es la pieza de mayor riesgo lógico.** Si la prueba de solidez en 300 casos falla, el trabajo se detiene ahí hasta corregirlo (regla explícita del encargo): puede alargar M2 más de una sesión.
+- **Coste computacional del banco (M3).** Comisario es el más caro (~1 s por intento más rechazos); se paraleliza con `worker_threads`, pero generar 600 casos con calidad puede tardar varios minutos y requerir varias iteraciones de calibración de bandas (11).
+- **Geometría de los 3 mapas nuevos** (hotel, barco, teatro): deben pasar la validación geométrica de M1 (sin solapes, grafo conexo, puertas sobre pared compartida). Se transcriben literalmente del Apéndice A y se validan con test antes de usarlos en generación.
+- **Base path de GitHub Pages (`/hora-muerta/`).** Cualquier ruta absoluta a `public/` (favicons, manifest, banco, Service Worker) debe pasar por `import.meta.env.BASE_URL`; ya se detectó que `Layout.astro` actual usa `/favicon.svg` a pelo y se corrige en M0.
+- **Transcripción de contenido** (Apéndices A, B, C, reparto, víctimas, objetos, motivos): cualquier error rompe la regla de "no inventar contenido"; se cubre con pruebas de instantánea de texto por tipo de pista y por plantilla de paso (sección 20).
+- **Playwright:** primer uso en el entorno del usuario requiere `pnpm exec playwright install` (descarga binarios de navegador) antes de `pnpm test:e2e`.
+- **Alcance total muy grande** (10 hitos, banco de 600 casos, solver de dos niveles, UI responsive completa, PWA): se ejecuta estrictamente un hito por sesión, con verificación y commit antes de continuar, como pide el encargo.
+
+---
+
+## 7. Lista de tareas
+
+- [x] **M0** (código listo, pendiente de verificar con `pnpm install && pnpm typecheck && pnpm lint && pnpm test && pnpm dev` en tu entorno) Proyecto: scripts pnpm, TS strict con 3 tsconfig, ESLint, Vitest, Playwright, tokens/tipografías, portada de v1 con demo animada sobre Casa Valdemar, base path corregido, `DECISIONES.md` creado.
+- [ ] **M1** Motor: rng, 6 mapas, grafo, recorridos, verdad, 16 pistas, prohibiciones, topes, textos Apéndice B, solver exacto + pruebas.
+- [ ] **M2** Solver humano: niveles 1–6, cadena crítica, puntuación, arquetipos + pruebas de solidez/coherencia + ejemplo Apéndice D.
+- [ ] **M3** Generador v2 + `bank.config.ts` + `build-bank`/`validate-bank`/`bank-report` + banco de 600 casos validado.
+- [ ] **M4** Mesa de trabajo responsive (móvil vertical/horizontal/escritorio), plano SVG con estela y ayuda de movimiento, tiza, hoja inferior.
+- [ ] **M5** Pistas interactivas, tabla de objetos, pestaña Caso, acusación, estrellas, cierre, reconstrucción, siguiente caso.
+- [ ] **M6** Pista del inspector en dos fases con resaltados y coste de estrellas.
+- [ ] **M7** Servir sin repetir, caso en curso, enlaces, caso del día, expediente, modo infinito en Web Worker.
+- [ ] **M8** Rango, desbloqueos, archivo de arquetipos, estadísticas, ajustes, persistencia `hm2:` y migración desde v1.
+- [ ] **M9** PWA sin conexión, rendimiento, accesibilidad, e2e con capturas en 3 tamaños × 2 temas.
+
+---
+
+## 8. Cómo probarlo en el móvil
+
+`pnpm dev -- --host` y abrir la URL `http://<IP-local>:4321/hora-muerta/` desde el teléfono en la misma red.
