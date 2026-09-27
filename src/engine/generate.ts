@@ -56,14 +56,14 @@ interface LevelGate {
 }
 
 /** Nivel máximo permitido y requisito mínimo de la cadena crítica (§11). */
-const LEVEL_GATE: Record<DiffIndex, LevelGate> = {
+export const LEVEL_GATE: Record<DiffIndex, LevelGate> = {
   0: { minLevel: 3, maxLevel: 4, capLevel: 4, capCount: 1 },
   1: { minLevel: 4, maxLevel: 5 },
   2: { minLevel: 5, maxLevel: 6, capLevel: 6, capCount: 2 },
 };
 
 /** Banda de puntuación inicial (§11); se recalibra con `bank-report` en M3 si hace falta. */
-const SCORE_BAND: Record<DiffIndex, [number, number]> = {
+export const SCORE_BAND: Record<DiffIndex, [number, number]> = {
   0: [8, 25],
   1: [22, 60],
   2: [55, 140],
@@ -164,7 +164,7 @@ export function buildTextContext(map: MapDef, castIndices: number[], objectIndic
 }
 
 /** Nivel máximo permitido, requisito mínimo y tope de pasos en el nivel más alto (§11). */
-function meetsLevelGate(diff: DiffIndex, maxLv: number, criticalSteps: Step[]): boolean {
+export function meetsLevelGate(diff: DiffIndex, maxLv: number, criticalSteps: Step[]): boolean {
   const gate = LEVEL_GATE[diff];
   if (maxLv < gate.minLevel || maxLv > gate.maxLevel) return false;
   if (gate.capLevel !== undefined && gate.capCount !== undefined) {
@@ -189,10 +189,22 @@ function computeSignature(mapId: MapId, rv: number, td: number, truth: Truth, cu
  * puntuación de la dificultad (rechaza los que se atascan, incluidos los que
  * solo se resolverían con R6_HYPOTHESIS: ver docs/DECISIONES.md).
  */
-export function buildCaseCandidate(seed: string, diff: DiffIndex, mapId?: MapId): CaseDraft | null {
+export interface BuildCaseOptions {
+  /**
+   * Reparto fijo (índices en CAST, cualquier orden): se usan sus primeros N
+   * tras ordenar alfabéticamente. Para el modo Expediente (§12.2): mismo mapa
+   * y mismo reparto de 5 en las tres noches; la de Novato usa los 4 primeros.
+   */
+  castOverride?: number[];
+}
+
+export function buildCaseCandidate(seed: string, diff: DiffIndex, mapId?: MapId, options?: BuildCaseOptions): CaseDraft | null {
   const params = DIFFICULTY[diff];
   const fixedMap = mapId ? MAPS.find((m) => m.id === mapId) : undefined;
   if (mapId && !fixedMap) throw new Error(`Mapa desconocido: ${mapId}`);
+  const sortedCastOverride = options?.castOverride
+    ? options.castOverride.slice().sort((a, b) => CAST[a].name.localeCompare(CAST[b].name, 'es'))
+    : undefined;
 
   for (let attempt = 0; attempt < GENERATION_ATTEMPTS; attempt++) {
     const rng = rngFromSeed(`${seed}|${diff}|${attempt}`);
@@ -201,12 +213,14 @@ export function buildCaseCandidate(seed: string, diff: DiffIndex, mapId?: MapId)
     const roomCount = map.rooms.length;
     const paths = enumeratePaths(graph.adj, roomCount, params.T);
 
-    const castIndices = shuffle(
-      rng,
-      CAST.map((_, i) => i),
-    )
-      .slice(0, params.N)
-      .sort((a, b) => CAST[a].name.localeCompare(CAST[b].name, 'es'));
+    const castIndices = sortedCastOverride
+      ? sortedCastOverride.slice(0, params.N)
+      : shuffle(
+          rng,
+          CAST.map((_, i) => i),
+        )
+          .slice(0, params.N)
+          .sort((a, b) => CAST[a].name.localeCompare(CAST[b].name, 'es'));
     const objectIndices = shuffle(
       rng,
       OBJECTS.map((_, i) => i),
