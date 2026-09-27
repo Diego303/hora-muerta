@@ -1,15 +1,25 @@
 // Portada (§17.2.1), fielmente portada de v1: héroe con plano animado, "Tres reglas,
-// nada más" y selector de nivel. "Caso suelto" sirve el siguiente caso del banco del
-// nivel elegido (§13); el caso del día real llega en el hito M7.
+// nada más" y selector de nivel. "Caso suelto" sirve el siguiente caso no jugado del
+// banco del nivel elegido, en un orden personal (§12.5); servir el caso en sí (y
+// detectar el agotamiento del grupo) es cosa de quien llama, no de esta pantalla.
 import { CHIP_COLORS } from '../engine/content/cast';
 import { MAPS } from '../engine/content/maps';
-import type { CaseDef, MapId } from '../engine/types';
-import { loadBank, modeForDiff } from '../game/bank';
+import type { CaseMode, MapId } from '../engine/types';
+import { loadSavedGame } from '../game/session';
 import { startDemo } from './demo';
-import { toast } from './toast';
+
+const MODE_LABEL: Record<CaseMode, string> = {
+  novato: 'Novato',
+  inspector: 'Inspector',
+  comisario: 'Comisario',
+  diario: 'Diario',
+  expediente: 'Expediente',
+};
 
 export interface LandingOptions {
-  onStart: (caseData: CaseDef) => void;
+  onStart: (diff: 0 | 1 | 2, mapFilter: MapId | null) => void;
+  onDaily: () => void;
+  onResume: () => void;
 }
 
 export function renderLanding(root: HTMLElement, options: LandingOptions): () => void {
@@ -38,7 +48,7 @@ export function renderLanding(root: HTMLElement, options: LandingOptions): () =>
             <button class="btn" id="goDaily">Jugar el caso del día</button>
             <a class="btn ghost" href="#niveles">Elegir nivel</a>
           </div>
-          <p class="resume" id="resume" hidden></p>
+          <p class="resume" id="resume" hidden><button class="link" id="resumeBtn"></button></p>
         </div>
         <figure class="demo" aria-label="Animación de un caso resuelto: los sospechosos se mueven por el plano hora a hora">
           <div class="clock" id="demoClock">21:00</div>
@@ -110,27 +120,18 @@ export function renderLanding(root: HTMLElement, options: LandingOptions): () =>
     button.addEventListener('click', () => {
       const diff = Number(button.dataset.lv);
       if (diff !== 0 && diff !== 1 && diff !== 2) return;
-      void startCase(diff, button);
+      options.onStart(diff, selectedMap);
     });
   });
-  root.querySelector('#goDaily')?.addEventListener('click', () => toast('El caso del día llega en el hito M7.'));
+  root.querySelector('#goDaily')?.addEventListener('click', () => options.onDaily());
 
-  async function startCase(diff: 0 | 1 | 2, button: HTMLButtonElement): Promise<void> {
-    button.disabled = true;
-    try {
-      const bank = await loadBank(modeForDiff(diff));
-      const pool = selectedMap ? bank.cases.filter((c) => c.map === selectedMap) : bank.cases;
-      if (pool.length === 0) {
-        toast('Todavía no hay casos de ese nivel disponibles.');
-        return;
-      }
-      const caseData = pool[Math.floor(Math.random() * pool.length)];
-      options.onStart(caseData);
-    } catch {
-      toast('No se ha podido cargar el caso. Comprueba tu conexión e inténtalo de nuevo.');
-    } finally {
-      button.disabled = false;
-    }
+  const resumeEl = root.querySelector<HTMLParagraphElement>('#resume');
+  const resumeBtn = root.querySelector<HTMLButtonElement>('#resumeBtn');
+  const saved = loadSavedGame();
+  if (resumeEl && resumeBtn && saved) {
+    resumeEl.hidden = false;
+    resumeBtn.textContent = `Seguir tu caso de ${MODE_LABEL[saved.mode]} sin terminar →`;
+    resumeBtn.addEventListener('click', () => options.onResume());
   }
 
   const demoMap = root.querySelector<SVGSVGElement>('#demoMap');

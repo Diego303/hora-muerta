@@ -213,3 +213,28 @@ footer {
   font-size: 0.9rem;
   border-top: 2px solid var(--wall);
 }
+
+/* Agotamiento de un grupo (§12.5). */
+.exhausted {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: calc(24px + env(safe-area-inset-top, 0px)) 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.exhausted h1 {
+  font-family: var(--display);
+  font-size: 1.4rem;
+}
+.exhausted-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
+}
+.exhausted-actions .btn {
+  justify-content: center;
+}

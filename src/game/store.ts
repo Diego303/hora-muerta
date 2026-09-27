@@ -116,6 +116,18 @@ export interface GameStore {
   accuse(): AccusationOutcome;
   requestHint(): void;
   explainHint(): void;
+  /** Restaura el caso en curso (§18, hm2:game) al reabrir la web. */
+  hydrate(saved: {
+    hour: Hour;
+    marks: [string, MarkValue][];
+    objGrid: [string, MarkValue][];
+    discarded: Sus[];
+    struck: number[];
+    strokes: ChalkStroke[];
+    errors: number;
+    hintsUsed: number;
+    elapsed: number;
+  }): void;
 }
 
 export function createGameStore(caseData: CaseDef, roomCount: number, computeHint: (caseData: CaseDef, roomCount: number, state: GameState) => Hint): GameStore {
@@ -352,6 +364,18 @@ export function createGameStore(caseData: CaseDef, roomCount: number, computeHin
     },
     explainHint() {
       state.hintExplained = true;
+      notify();
+    },
+    hydrate(saved) {
+      state.hour = saved.hour;
+      state.marks = new Map(saved.marks);
+      state.objGrid = new Map(saved.objGrid);
+      state.discarded = new Set(saved.discarded);
+      state.struck = new Set(saved.struck);
+      state.strokes = saved.strokes;
+      state.errors = saved.errors;
+      state.hintsUsed = saved.hintsUsed;
+      state.elapsed = saved.elapsed;
       notify();
     },
   };

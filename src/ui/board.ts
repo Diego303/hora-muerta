@@ -6,8 +6,11 @@ import { MAPS } from '../engine/content/maps';
 import { buildTextContext } from '../engine/generate';
 import { hintPush, stepExplanation, stepFocus, timeLabel } from '../engine/text';
 import type { CaseDef, MapDef, Room } from '../engine/types';
+import { markPlayed } from '../game/bank';
 import { nextHint } from '../game/hints';
+import { recordDailyResult, todayKey } from '../game/modes';
 import { computeStars } from '../game/scoring';
+import { clearSavedGame, loadSavedGame, saveGame } from '../game/session';
 import type { ChalkColor, MarkValue } from '../game/store';
 import { createGameStore, markKey } from '../game/store';
 import { openAccuseSheet } from './accuse';
@@ -22,6 +25,10 @@ import type { PlanHandle, SuspectView } from './plan';
 export interface BoardOptions {
   onExit: () => void;
   onNextCase: (finishedCase: CaseDef) => void;
+  /** Versión del banco de la que viene `caseData` (§12.5, §12.6), para marcarlo
+   * como jugado al cerrar el caso; `null` si no viene de un banco versionado
+   * (p. ej. modo infinito). */
+  bankVersion: string | null;
 }
 
 function findMap(mapId: CaseDef['map']): MapDef {
@@ -47,6 +54,13 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   const textCtx = buildTextContext(map, caseData.cast, caseData.objects);
   const suspects: SuspectView[] = textCtx.suspects.map((s) => ({ name: s.name, init: s.name[0], color: s.color }));
   const store = createGameStore(caseData, map.rooms.length, nextHint);
+
+  // Caso en curso (§18, hm2:game): retoma el progreso guardado si es el mismo
+  // caso; si no, empieza de cero. Abrir la web no lo descarta; solo cerrar el
+  // caso (showClosure) lo borra.
+  const resumed = loadSavedGame();
+  const startedAt = resumed && resumed.caseId === caseData.id ? resumed.startedAt : Date.now();
+  if (resumed && resumed.caseId === caseData.id) store.hydrate(resumed);
 
   root.innerHTML = `
     <div class="game" id="gameRoot" data-case-id="${caseData.id}">
@@ -327,6 +341,28 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   renderLegend();
   renderAll();
 
+  // Guardado automático con 300 ms de retardo tras cada acción, y al momento
+  // si se oculta la pestaña (§18), para no perder el progreso al recargar.
+  let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  function flushSave(): void {
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+    }
+    saveGame(caseData.id, caseData.mode, store.getState(), startedAt);
+  }
+  const unsaveSubscribe = store.subscribe(() => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(flushSave, 300);
+  });
+  function onVisibilityChange(): void {
+    if (document.hidden) flushSave();
+  }
+  document.addEventListener('visibilitychange', onVisibilityChange);
+
+  // Cronómetro (§14.2): oculto por defecto, pero se registra igualmente.
+  const tickTimer = setInterval(() => store.tick(), 1000);
+
   let expandCleanup: (() => void) | null = null;
   function openExpandedPlan(): void {
     const overlay = document.createElement('div');
@@ -382,12 +418,27 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
 
   function cleanup(): void {
     unsubscribe();
+    unsaveSubscribe();
+    if (saveTimer) clearTimeout(saveTimer);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    clearInterval(tickTimer);
     chalk.destroy();
     expandCleanup?.();
   }
 
   function showClosure(): void {
+    const finalState = store.getState();
     cleanup();
+    clearSavedGame();
+    if (options.bankVersion) markPlayed(options.bankVersion, caseData.id);
+    if (caseData.mode === 'diario') {
+      recordDailyResult(todayKey(), {
+        stars: computeStars(finalState.errors, finalState.hintsUsed),
+        errors: finalState.errors,
+        hints: finalState.hintsUsed,
+        time: finalState.elapsed,
+      });
+    }
     let closureCleanup: (() => void) | null = null;
     closureCleanup = renderClosure(root, map, caseData, textCtx, suspects, store, {
       onNext: () => {
