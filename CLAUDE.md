@@ -10,4 +10,3 @@
 - Móvil primero: cómodo a 360 px de ancho, sin scroll horizontal del body, objetivos táctiles de 44 px, safe areas, 100dvh.
 - Pizarra: solo Marcar, Tiza y Ver, más la estela y la ayuda de movimiento. No añadir herramientas.
 - Sin peticiones de red salvo Google Fonts y archivos propios. Sin analítica ni cookies. localStorage siempre con try/catch.
-- Antes de cerrar un hito: npm run typecheck, npm run lint, npm test (y test:e2e cuando exista).

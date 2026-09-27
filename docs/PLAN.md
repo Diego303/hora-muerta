@@ -149,8 +149,9 @@ Un hito por sesión. Al cerrar cada uno: `pnpm typecheck && pnpm lint && pnpm te
 **Pruebas:** `tests/engine/holds.test.ts` (16 tipos), `tests/engine/maps.test.ts` (geometría de los 6 mapas: solapes, paredes compartidas salvo la pasarela del tren, conexión), `tests/engine/clues.test.ts` (prohibiciones §6.2), `tests/engine/exact.test.ts` (solver exacto vs. fuerza bruta independiente en 30 casos Novato), `tests/engine/determinism.test.ts` (misma semilla → mismo caso byte a byte).
 **Hecho cuando (a verificar por el usuario):** las pruebas anteriores pasan con `pnpm test`; decisiones de interpretación (prohibición `notat`/`never` más amplia que v1, numerales hasta "cinco", aproximación de "la que más descarta") anotadas en `docs/DECISIONES.md`.
 
-### M2 — Solver humano
-**Tareas:** `human.ts`: estado por máscaras de bits (`poss`, `carry`, `cand`), reglas de niveles 1–6 (§9.2), bucle de "regla más sencilla que avance" (§9.3), `Step` con premisas y cadena crítica por dependencias hacia atrás (§9.4), puntuación (§9.5); `archetypes.ts`: deducción clave y los 7 arquetipos (§10).
+### M2 — Solver humano ✅ (código listo, pendiente de verificar con `pnpm test` en tu entorno — ver riesgos)
+**Hecho:** `src/engine/human.ts`: estado por máscaras de bits (`poss`, `carry`, `cand`), reglas de niveles 1-5 completas (§9.2: R1_AT/NOTAT/FEAT/NEVER/STAYED/NCARRY/EMPTY, R2_CANT_BE_THERE/ONLY_ONE/TAKEN, R3_REACH_FWD/BWD/STILL/MOVED, R4_TOGETHER/ADJ/APART/COUNT_FULL/COUNT_NEED/OBJ_WHERE/OBJ_WITH/VISITED, R5_OBJ_SINGLE/SUS_SINGLE/WEAPON), bucle de "regla más sencilla que avance" (§9.3), `Step` con premisas acumuladas por celda y cadena crítica por dependencias hacia atrás (§9.4), puntuación (§9.5), deducción clave y 6 de los 7 arquetipos (§10; falta `callejon`, que exige el nivel 6). **Nivel 6 (R6_HYPOTHESIS) queda pendiente** — ver `docs/DECISIONES.md`: un caso que solo se resuelva por hipótesis se rechaza como atascado (seguro, pero incompleto para Comisario) en vez de aceptarse sin comprobar.
+**Pruebas:** `tests/engine/human.test.ts` — el ejemplo del Apéndice D completo (verdad construida a mano, verificada contra las 5 pistas), solidez y coherencia con el solver exacto sobre ese ejemplo, y solidez/coherencia en 300 casos generados (100 por nivel; los que el solver da por atascados se saltan, no fallan la prueba).
 **Hecho cuando:** solidez en 300 casos generados (toda conclusión de todo paso es verdadera en `truth`); coherencia con el solver exacto; el ejemplo del Apéndice D reproduce exactamente la cadena de 11 pasos descrita; textos del Apéndice C para cada regla usada.
 
 ### M3 — Generador y banco
@@ -200,7 +201,7 @@ Un hito por sesión. Al cerrar cada uno: `pnpm typecheck && pnpm lint && pnpm te
 
 - [x] **M0** (código listo, pendiente de verificar con `pnpm install && pnpm typecheck && pnpm lint && pnpm test && pnpm dev` en tu entorno) Proyecto: scripts pnpm, TS strict con 3 tsconfig, ESLint, Vitest, Playwright, tokens/tipografías, portada de v1 con demo animada sobre Casa Valdemar, base path corregido, `DECISIONES.md` creado.
 - [x] **M1** (código listo, pendiente de verificar con `pnpm typecheck && pnpm lint && pnpm test`) Motor: rng, 6 mapas, grafo, recorridos, verdad, 16 pistas, prohibiciones, topes, textos Apéndice B, solver exacto, generador (pasos 1-8/11) + pruebas.
-- [ ] **M2** Solver humano: niveles 1–6, cadena crítica, puntuación, arquetipos + pruebas de solidez/coherencia + ejemplo Apéndice D.
+- [x] **M2** (código listo, niveles 1-5; nivel 6/R6_HYPOTHESIS pendiente, ver DECISIONES.md) Solver humano: cadena crítica, puntuación, 6/7 arquetipos + pruebas de solidez/coherencia + ejemplo Apéndice D.
 - [ ] **M3** Generador v2 + `bank.config.ts` + `build-bank`/`validate-bank`/`bank-report` + banco de 600 casos validado.
 - [ ] **M4** Mesa de trabajo responsive (móvil vertical/horizontal/escritorio), plano SVG con estela y ayuda de movimiento, tiza, hoja inferior.
 - [ ] **M5** Pistas interactivas, tabla de objetos, pestaña Caso, acusación, estrellas, cierre, reconstrucción, siguiente caso.
