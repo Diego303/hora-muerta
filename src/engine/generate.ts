@@ -30,7 +30,7 @@ import { fnv1a, pick, rngFromSeed, shuffle } from './rng';
 import type { ClueTextContext } from './text';
 import { clueText, plainText } from './text';
 import { buildTruth, generateNight, generateObjectAssignment, planNight } from './truth';
-import type { CaseDef, Clue, ClueKind, MapDef, MapId, Step, Truth } from './types';
+import type { CaseDef, Clue, ClueKind, MapDef, MapId, Truth } from './types';
 
 export interface DifficultyParams {
   N: number;
@@ -163,13 +163,17 @@ export function buildTextContext(map: MapDef, castIndices: number[], objectIndic
   };
 }
 
-/** Nivel máximo permitido, requisito mínimo y tope de pasos en el nivel más alto (§11). */
-export function meetsLevelGate(diff: DiffIndex, maxLv: number, criticalSteps: Step[]): boolean {
+/**
+ * Nivel máximo permitido, requisito mínimo y tope de pasos en el nivel más alto
+ * (§11). `maxLvStepCount` cuenta solo la cadena que identifica al culpable
+ * (HumanSolution.maxLvStepCount), no la cadena completa que incluye el arma:
+ * ver docs/DECISIONES.md.
+ */
+export function meetsLevelGate(diff: DiffIndex, maxLv: number, maxLvStepCount: number): boolean {
   const gate = LEVEL_GATE[diff];
   if (maxLv < gate.minLevel || maxLv > gate.maxLevel) return false;
-  if (gate.capLevel !== undefined && gate.capCount !== undefined) {
-    const countAtCap = criticalSteps.filter((s) => s.lv === gate.capLevel).length;
-    if (countAtCap > gate.capCount) return false;
+  if (gate.capLevel !== undefined && gate.capCount !== undefined && maxLv === gate.capLevel) {
+    if (maxLvStepCount > gate.capCount) return false;
   }
   return true;
 }
@@ -269,7 +273,7 @@ export function buildCaseCandidate(seed: string, diff: DiffIndex, mapId?: MapId,
     if (!solved) continue; // atascado: el caso exige más de lo que el solver humano sabe hacer
 
     const criticalSteps = solved.steps.filter((s) => s.crit);
-    if (!meetsLevelGate(diff, solved.maxLv, criticalSteps)) continue;
+    if (!meetsLevelGate(diff, solved.maxLv, solved.maxLvStepCount)) continue;
     const [scoreMin, scoreMax] = SCORE_BAND[diff];
     if (solved.score < scoreMin || solved.score > scoreMax) continue;
 

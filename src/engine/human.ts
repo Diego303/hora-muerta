@@ -48,6 +48,9 @@ export interface HumanSolution {
   steps: Step[];
   score: number;
   maxLv: 1 | 2 | 3 | 4 | 5 | 6;
+  /** Cuántos pasos de la cadena que identifica al culpable están en `maxLv`
+   * (para el tope "como mucho N pasos de ese nivel" de §11: Novato/Comisario). */
+  maxLvStepCount: number;
   /** Índice, dentro de `steps`, del paso de deducción clave. */
   key: number;
   arch: Archetype[];
@@ -74,7 +77,7 @@ export function solveHuman(ctx: HumanContext, clues: Clue[]): HumanSolution | nu
   };
   const possSteps: number[][][] = Array.from({ length: ctx.N }, () => Array.from({ length: ctx.T }, () => [] as number[]));
   const carrySteps: number[][] = Array.from({ length: ctx.N }, () => []);
-  let candSteps: number[] = [];
+  const candSteps: number[] = [];
   const steps: Step[] = [];
 
   function isDone(): boolean {
@@ -290,6 +293,18 @@ export function solveHuman(ctx: HumanContext, clues: Clue[]): HumanSolution | nu
     let prem = res.prem;
     for (let c = 0; c < ctx.N; c++) if (c !== only) prem = prem.concat(possSteps[c][ctx.td]);
     return commit(2, 'R2_ONLY_ONE', [], res.concl, prem);
+  }
+
+  /** Si ya solo queda un candidato (por la vía que sea: R2_ONLY_ONE lo deja así
+   * directamente, pero R4_TOGETHER u otras eliminaciones también pueden dejar
+   * cand con un solo bit), ESE es quien estaba a solas con la víctima: fija su
+   * sala en la hora del crimen, aunque poss aún no lo reflejara. */
+  function ruleR2PinCulprit(): boolean {
+    if (popcount(state.cand) !== 1) return false;
+    const c = singleBit(state.cand);
+    const res = applyPoss(c, ctx.td, bit(ctx.rv));
+    if (!res) return false;
+    return commit(2, 'R2_ONLY_ONE', [], res.concl, res.prem.concat(candSteps));
   }
 
   function ruleR2Taken(): boolean {
@@ -630,9 +645,9 @@ export function solveHuman(ctx: HumanContext, clues: Clue[]): HumanSolution | nu
   // R6_HYPOTHESIS (§9.2) queda pendiente: ver docs/DECISIONES.md. Un caso que
   // solo se resuelva suponiendo una hipótesis se rechaza aquí como "atascado".
 
-  const LEVELS: Array<Array<() => boolean>> = [
+  const LEVELS: (() => boolean)[][] = [
     [ruleR1At, ruleR1NotAt, ruleR1Feat, ruleR1Never, ruleR1Stayed, ruleR1Ncarry, ruleR1Empty],
-    [ruleR2CantBeThere, ruleR2OnlyOne, ruleR2Taken],
+    [ruleR2CantBeThere, ruleR2OnlyOne, ruleR2PinCulprit, ruleR2Taken],
     [ruleR3ReachFwd, ruleR3ReachBwd, ruleR3Still, ruleR3Moved],
     [ruleR4Together, ruleR4Adj, ruleR4Apart, ruleR4CountFull, ruleR4CountNeed, ruleR4ObjWhere, ruleR4ObjWith, ruleR4Visited],
     [ruleR5ObjSingle, ruleR5SusSingle],
@@ -656,25 +671,32 @@ export function solveHuman(ctx: HumanContext, clues: Clue[]): HumanSolution | nu
   // Cierre (§Apéndice D, pasos 10-11: R5_SUS_SINGLE y luego, aparte, R5_WEAPON).
   const culprit = singleBit(state.cand);
   const weapon = singleBit(state.carry[culprit]);
-  commit(5, 'R5_WEAPON', [], [{ k: 'culprit', c: culprit }, { k: 'carry', c: culprit, o: weapon }], candSteps.concat(carrySteps[culprit]));
+  // Solo concluye el arma, no "culprit" de nuevo (eso ya lo concluyó un paso
+  // anterior): si repitiera "culprit" aquí, esta cadena de premisas —que
+  // incluye la eliminación de objetos— se colaría en culpritIndices y volvería
+  // a inflar el nivel máximo (ver comentario más abajo).
+  commit(5, 'R5_WEAPON', [], [{ k: 'carry', c: culprit, o: weapon }], candSteps.concat(carrySteps[culprit]));
 
-  const { criticalIndices } = markCriticalChain(steps, culprit, weapon);
-  for (const i of criticalIndices) steps[i].crit = true;
+  // El Apéndice D distingue la cadena completa (11 pasos, incluidos los que solo
+  // determinan el arma tras conocer ya al culpable) de "el nivel máximo" y la
+  // puntuación, que solo cuentan la parte que identifica AL CULPABLE (pasos 1-5
+  // en ese ejemplo: puntuación 1+4+2+6+2=15, nivel máximo 4, aunque los pasos
+  // 10-11 sean de nivel 5). Ver docs/DECISIONES.md.
+  const { fullIndices, culpritIndices } = markCriticalChain(steps, culprit, weapon);
+  for (const i of fullIndices) steps[i].crit = true;
 
-  const criticalSteps = criticalIndices.map((i) => steps[i]);
-  const score = criticalSteps.reduce((sum, step) => sum + LEVEL_WEIGHT[step.lv], 0);
-  const maxLv = criticalSteps.reduce<1 | 2 | 3 | 4 | 5 | 6>((max, step) => (step.lv > max ? step.lv : max), 1);
-  const key = pickKeyStep(criticalIndices, steps, culprit);
-  const arch = detectArchetypes(criticalIndices, steps, key);
+  const culpritSteps = culpritIndices.map((i) => steps[i]);
+  const score = culpritSteps.reduce((sum, step) => sum + LEVEL_WEIGHT[step.lv], 0);
+  const maxLv = culpritSteps.reduce<1 | 2 | 3 | 4 | 5 | 6>((max, step) => (step.lv > max ? step.lv : max), 1);
+  const maxLvStepCount = culpritSteps.filter((step) => step.lv === maxLv).length;
+  const key = pickKeyStep(culpritIndices, steps, culprit);
+  const arch = detectArchetypes(culpritIndices, steps, key);
 
-  return { steps, score, maxLv, key, arch };
+  return { steps, score, maxLv, maxLvStepCount, key, arch };
 }
 
 /** Cadena crítica (§9.4): desde los pasos que fijan culpable/arma, hacia atrás por las premisas. */
-function markCriticalChain(steps: Step[], culprit: Sus, weapon: Obj): { criticalIndices: number[] } {
-  const isTerminal = (step: Step): boolean =>
-    step.concl.some((c) => (c.k === 'culprit' && c.c === culprit) || (c.k === 'carry' && c.c === culprit && c.o === weapon));
-
+function reachableBackward(steps: Step[], isTerminal: (step: Step) => boolean): number[] {
   const reachable = new Set<number>();
   const queue: number[] = [];
   steps.forEach((step, i) => {
@@ -686,7 +708,17 @@ function markCriticalChain(steps: Step[], culprit: Sus, weapon: Obj): { critical
     reachable.add(i);
     for (const p of steps[i].prem) if (!reachable.has(p)) queue.push(p);
   }
-  return { criticalIndices: Array.from(reachable).sort((a, b) => a - b) };
+  return Array.from(reachable).sort((a, b) => a - b);
+}
+
+/** `culpritIndices`: solo lo necesario para saber QUIÉN es (§9.4, base de nivel/puntuación/clave).
+ * `fullIndices`: añade además lo necesario para saber el arma (para `solve.steps`, la cadena completa
+ * que se enseña al cerrar el caso, como los 11 pasos del Apéndice D). */
+function markCriticalChain(steps: Step[], culprit: Sus, weapon: Obj): { fullIndices: number[]; culpritIndices: number[] } {
+  const culpritIndices = reachableBackward(steps, (step) => step.concl.some((c) => c.k === 'culprit' && c.c === culprit));
+  const weaponIndices = reachableBackward(steps, (step) => step.concl.some((c) => c.k === 'carry' && c.c === culprit && c.o === weapon));
+  const fullIndices = Array.from(new Set([...culpritIndices, ...weaponIndices])).sort((a, b) => a - b);
+  return { fullIndices, culpritIndices };
 }
 
 /** Deducción clave (§10.1): el paso crítico de mayor nivel que descarta un candidato

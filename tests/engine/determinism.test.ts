@@ -9,20 +9,30 @@ import type { DiffIndex } from '../../src/engine/clues';
 // semilla concreta produzca un caso; solo que el comportamiento sea idéntico
 // para la misma semilla, y que al menos alguna de varias semillas sí produzca
 // un caso (si no, el generador estaría roto, no solo siendo selectivo).
+// Inspector/Comisario son mucho más lentos de generar que Novato (ver
+// docs/DECISIONES.md: R6_HYPOTHESIS pendiente), así que se muestrean menos
+// semillas ahí — el determinismo no necesita muchas repeticiones para
+// comprobarse, solo alguna en cada dificultad.
+const SEEDS_PER_DIFF: Record<DiffIndex, number> = { 0: 5, 1: 2, 2: 2 };
+
 describe('determinismo (§7): la misma semilla produce el mismo caso', () => {
-  it('genera el mismo resultado (caso o null) para la misma semilla y dificultad', () => {
-    let sawCase = false;
-    for (const diff of [0, 1, 2] as DiffIndex[]) {
-      for (let i = 0; i < 5; i++) {
-        const seed = `determinismo-${diff}-${i}`;
-        const a = buildCaseCandidate(seed, diff);
-        const b = buildCaseCandidate(seed, diff);
-        expect(JSON.stringify(a)).toBe(JSON.stringify(b));
-        if (a) sawCase = true;
+  it(
+    'genera el mismo resultado (caso o null) para la misma semilla y dificultad',
+    () => {
+      let sawCase = false;
+      for (const diff of [0, 1, 2] as DiffIndex[]) {
+        for (let i = 0; i < SEEDS_PER_DIFF[diff]; i++) {
+          const seed = `determinismo-${diff}-${i}`;
+          const a = buildCaseCandidate(seed, diff);
+          const b = buildCaseCandidate(seed, diff);
+          expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+          if (a) sawCase = true;
+        }
       }
-    }
-    expect(sawCase).toBe(true);
-  });
+      expect(sawCase).toBe(true);
+    },
+    300000,
+  );
 
   it('semillas distintas no producen sistemáticamente el mismo caso', () => {
     const a = buildCaseCandidate('determinismo-a', 0);

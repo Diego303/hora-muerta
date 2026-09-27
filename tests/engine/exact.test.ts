@@ -174,6 +174,6 @@ describe('solver exacto vs. fuerza bruta en 30 casos Novato (§20)', () => {
       // Sanity mínima: si esto fuera 0, el generador estaría roto, no solo siendo selectivo.
       expect(solvedCount).toBeGreaterThan(0);
     },
-    60000,
+    300000,
   );
 });

@@ -13,6 +13,8 @@ import type { SolveContext } from '../src/engine/exact';
 import { buildGraph } from '../src/engine/graph';
 import { buildTextContext, meetsLevelGate, SCORE_BAND } from '../src/engine/generate';
 import { holds } from '../src/engine/clues';
+import { solveHuman } from '../src/engine/human';
+import type { HumanContext } from '../src/engine/human';
 import { enumeratePaths } from '../src/engine/paths';
 import { clueText, plainText } from '../src/engine/text';
 import type { BankFile, CaseDef, MapDef, SeriesDef } from '../src/engine/types';
@@ -66,7 +68,17 @@ function validateCase(c: CaseDef, errors: string[]): void {
   const result = checkUnique(solveCtx, c.culprit, c.weapon, c.clues);
   if (result.status !== 'unique') fail(`el solver exacto no da unique (${result.status})`);
 
-  if (!meetsLevelGate(c.diff, c.solve.maxLv, c.solve.steps)) fail(`nivel/tope fuera de lo permitido para la dificultad (maxLv=${c.solve.maxLv})`);
+  // Se vuelve a resolver con el solver humano (no basta con confiar en lo guardado):
+  // así se detecta si el motor cambió y el caso guardado ya no es coherente con él.
+  const humanCtx: HumanContext = { N: c.N, T: c.T, graph, rv: c.rv, td: c.td };
+  const solved = solveHuman(humanCtx, c.clues);
+  if (!solved) {
+    fail('el solver humano ya no resuelve este caso (¿cambió el motor desde que se generó?)');
+  } else {
+    if (solved.maxLv !== c.solve.maxLv) fail(`maxLv guardado (${c.solve.maxLv}) no coincide con el recalculado (${solved.maxLv})`);
+    if (solved.score !== c.solve.score) fail(`score guardado (${c.solve.score}) no coincide con el recalculado (${solved.score})`);
+    if (!meetsLevelGate(c.diff, solved.maxLv, solved.maxLvStepCount)) fail(`nivel/tope fuera de lo permitido para la dificultad (maxLv=${solved.maxLv})`);
+  }
   const [scoreMin, scoreMax] = SCORE_BAND[c.diff];
   if (c.solve.score < scoreMin || c.solve.score > scoreMax) fail(`puntuación ${c.solve.score} fuera de la banda [${scoreMin}, ${scoreMax}]`);
   if (c.solve.key < 0 || c.solve.key >= c.solve.steps.length) fail('solve.key fuera de rango');
