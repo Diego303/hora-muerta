@@ -58,12 +58,12 @@ export interface HumanSolution {
 
 const LEVEL_WEIGHT: Record<1 | 2 | 3 | 4 | 5 | 6, number> = { 1: 1, 2: 2, 3: 4, 4: 6, 5: 8, 6: 20 };
 
+/** Tope de pasos de la propagación interna de una hipótesis (§9.2: "hasta un máximo de 12 pasos"). */
+const MAX_HYPOTHESIS_STEPS = 12;
+
 /**
  * Resuelve un caso como lo haría una persona (§9). Devuelve null si el solver
- * se atasca (el caso no sirve: exige adivinar). El nivel 6 (R6_HYPOTHESIS,
- * §9.2) queda pendiente (ver docs/DECISIONES.md): por ahora, un caso que solo
- * se resuelva suponiendo una hipótesis se rechaza como "atascado", nunca se
- * acepta sin comprobar — es la opción segura mientras no esté implementado.
+ * se atasca (el caso no sirve: exige adivinar).
  */
 export function solveHuman(ctx: HumanContext, clues: Clue[]): HumanSolution | null {
   const roomCount = ctx.graph.adj.length;
@@ -156,6 +156,47 @@ export function solveHuman(ctx: HumanContext, clues: Clue[]): HumanSolution | nu
   function commit(lv: 1 | 2 | 3 | 4 | 5 | 6, rule: string, cl: number[], concl: Conclusion[], prem: number[]): true {
     steps.push({ lv, rule, cl, concl, prem: Array.from(new Set(prem)), crit: false });
     return true;
+  }
+
+  /** Todos los pasos vistos hasta ahora, como premisas: sobreestimar es aceptable (§9.4). */
+  function allStepsAsPrem(): number[] {
+    return steps.map((_, i) => i);
+  }
+
+  interface Snapshot {
+    poss: number[][];
+    carry: number[];
+    cand: number;
+    possSteps: number[][][];
+    carrySteps: number[][];
+    candSteps: number[];
+    stepsLength: number;
+  }
+
+  /** Copia el estado mutable para poder deshacer una hipótesis (§9.2) que no lleve a nada. */
+  function snapshot(): Snapshot {
+    return {
+      poss: state.poss.map((row) => row.slice()),
+      carry: state.carry.slice(),
+      cand: state.cand,
+      possSteps: possSteps.map((row) => row.map((arr) => arr.slice())),
+      carrySteps: carrySteps.map((arr) => arr.slice()),
+      candSteps: candSteps.slice(),
+      stepsLength: steps.length,
+    };
+  }
+
+  function restore(snap: Snapshot): void {
+    for (let c = 0; c < ctx.N; c++) {
+      state.poss[c] = snap.poss[c].slice();
+      state.carry[c] = snap.carry[c];
+      for (let t = 0; t < ctx.T; t++) possSteps[c][t] = snap.possSteps[c][t].slice();
+      carrySteps[c] = snap.carrySteps[c].slice();
+    }
+    state.cand = snap.cand;
+    candSteps.length = 0;
+    candSteps.push(...snap.candSteps);
+    steps.length = snap.stepsLength;
   }
 
   function closureOf(mask: number): number {
@@ -642,16 +683,73 @@ export function solveHuman(ctx: HumanContext, clues: Clue[]): HumanSolution | nu
     return false;
   }
 
-  // R6_HYPOTHESIS (§9.2) queda pendiente: ver docs/DECISIONES.md. Un caso que
-  // solo se resuelva suponiendo una hipótesis se rechaza aquí como "atascado".
+  // ---------------- Nivel 6: hipótesis corta ----------------
 
-  const LEVELS: (() => boolean)[][] = [
+  const BASE_LEVELS: (() => boolean)[][] = [
     [ruleR1At, ruleR1NotAt, ruleR1Feat, ruleR1Never, ruleR1Stayed, ruleR1Ncarry, ruleR1Empty],
     [ruleR2CantBeThere, ruleR2OnlyOne, ruleR2PinCulprit, ruleR2Taken],
     [ruleR3ReachFwd, ruleR3ReachBwd, ruleR3Still, ruleR3Moved],
     [ruleR4Together, ruleR4Adj, ruleR4Apart, ruleR4CountFull, ruleR4CountNeed, ruleR4ObjWhere, ruleR4ObjWith, ruleR4Visited],
     [ruleR5ObjSingle, ruleR5SusSingle],
   ];
+
+  /** Propaga solo con niveles 1-5 (profundidad 1: nunca se anida una hipótesis
+   * dentro de otra) hasta `MAX_HYPOTHESIS_STEPS` pasos o hasta contradicción. */
+  function propagateForContradiction(maxSteps: number): boolean {
+    for (let i = 0; i < maxSteps; i++) {
+      if (isContradiction()) return true;
+      let applied = false;
+      for (const level of BASE_LEVELS) {
+        for (const rule of level) {
+          if (rule()) {
+            applied = true;
+            break;
+          }
+        }
+        if (applied) break;
+      }
+      if (!applied) break;
+    }
+    return isContradiction();
+  }
+
+  /** Supone "fue X" para cada candidato que queda; si lleva a contradicción, X no es el culpable. */
+  function ruleR6HypCulprit(): boolean {
+    for (const c of bitsOf(state.cand, ctx.N)) {
+      const before = snapshot();
+      state.cand = bit(c);
+      const contradiction = propagateForContradiction(MAX_HYPOTHESIS_STEPS);
+      restore(before);
+      if (!contradiction) continue;
+      const res = applyCand(allSus & ~bit(c));
+      if (!res) continue;
+      return commit(6, 'R6_HYPOTHESIS', [], res.concl, allStepsAsPrem());
+    }
+    return false;
+  }
+
+  /** Supone "X estaba en R a la hora T" para cada celda con exactamente 2 salas
+   * posibles; si una de las dos lleva a contradicción, la otra es la buena. */
+  function ruleR6HypCell(): boolean {
+    for (let c = 0; c < ctx.N; c++) {
+      for (let t = 0; t < ctx.T; t++) {
+        if (popcount(state.poss[c][t]) !== 2) continue;
+        for (const r of bitsOf(state.poss[c][t], roomCount)) {
+          const before = snapshot();
+          state.poss[c][t] = bit(r);
+          const contradiction = propagateForContradiction(MAX_HYPOTHESIS_STEPS);
+          restore(before);
+          if (!contradiction) continue;
+          const res = applyPoss(c, t, allRooms & ~bit(r));
+          if (!res) continue;
+          return commit(6, 'R6_HYPOTHESIS', [], res.concl, allStepsAsPrem());
+        }
+      }
+    }
+    return false;
+  }
+
+  const LEVELS: (() => boolean)[][] = [...BASE_LEVELS, [ruleR6HypCulprit, ruleR6HypCell]];
 
   while (!isDone()) {
     if (isContradiction()) return null;
@@ -753,6 +851,8 @@ function detectArchetypes(criticalIndices: number[], steps: Step[], key: number)
   // "objeto" exige que sea la propia deducción clave la que ligue el objeto a su portador (§10.2).
   if (keyRule === 'R4_OBJ_WHERE' || keyRule === 'R4_OBJ_WITH' || keyRule === 'R5_OBJ_SINGLE') found.push('objeto');
   if (rules.has('R1_EMPTY')) found.push('vacia');
+  // "callejón sin salida" (§10.2): la cadena usa una hipótesis (solo posible en Comisario, §11).
+  if (rules.has('R6_HYPOTHESIS')) found.push('callejon');
 
   // El primero de la lista es el de la deducción clave, si su regla corresponde a un arquetipo detectado.
   const keyArch: Partial<Record<string, Archetype>> = {
@@ -763,6 +863,7 @@ function detectArchetypes(criticalIndices: number[], steps: Step[], key: number)
     R4_OBJ_WHERE: 'objeto',
     R4_OBJ_WITH: 'objeto',
     R5_OBJ_SINGLE: 'objeto',
+    R6_HYPOTHESIS: 'callejon',
   };
   const primary = keyArch[keyRule];
   // Si no se reconoce ningún patrón (heurística simplificada, ver docs/DECISIONES.md),
