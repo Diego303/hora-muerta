@@ -1,6 +1,10 @@
 // Estado del juego + acciones puras + suscripción (§19.3). Un único store por
 // partida; la UI se suscribe y repinta solo lo afectado. No usa el DOM.
 import type { CaseDef, Hour, Obj, Room, Sus } from '../engine/types';
+// Import de solo tipos: game/hints.ts importa markKey/objGridKey/GameState de
+// aquí, así que un import "de verdad" de vuelta crearía un ciclo. nextHint()
+// se recibe como dependencia en createGameStore() en vez de importarse.
+import type { Hint } from './hints';
 import type { AccusationOutcome, CaseResult } from './scoring';
 import { checkAccusation } from './scoring';
 import { getSettings } from './storage';
@@ -50,6 +54,19 @@ export interface GameState {
   result: CaseResult;
   /** Pistas del inspector solicitadas (M6); ya cuenta para las estrellas (§14.1). */
   hintsUsed: number;
+  /** Pista actual (§15), o null si no se ha pedido ninguna todavía. */
+  hint: Hint | null;
+  /** Fase 2 ("Explícamelo", gratis) ya mostrada para `hint` (§15.1). */
+  hintExplained: boolean;
+}
+
+function hintsEqual(a: Hint | null, b: Hint): boolean {
+  if (!a || a.kind !== b.kind) return false;
+  if (a.kind === 'step' && b.kind === 'step') return a.stepIndex === b.stepIndex;
+  if (a.kind === 'markError' && b.kind === 'markError') {
+    return a.hour === b.hour && a.room === b.room && a.obj === b.obj && a.suspect === b.suspect;
+  }
+  return true; // los dos son 'done'
 }
 
 type UndoAction =
@@ -97,9 +114,11 @@ export interface GameStore {
   setAccuseCulprit(c: Sus | null): void;
   setAccuseWeapon(o: Obj | null): void;
   accuse(): AccusationOutcome;
+  requestHint(): void;
+  explainHint(): void;
 }
 
-export function createGameStore(caseData: CaseDef): GameStore {
+export function createGameStore(caseData: CaseDef, roomCount: number, computeHint: (caseData: CaseDef, roomCount: number, state: GameState) => Hint): GameStore {
   const state: GameState = {
     caseData,
     hour: 0,
@@ -124,6 +143,8 @@ export function createGameStore(caseData: CaseDef): GameStore {
     errors: 0,
     result: 'playing',
     hintsUsed: 0,
+    hint: null,
+    hintExplained: false,
   };
   const undoStack: UndoAction[] = [];
   const listeners = new Set<Listener>();
@@ -315,6 +336,23 @@ export function createGameStore(caseData: CaseDef): GameStore {
       state.result = outcome.result;
       notify();
       return outcome;
+    },
+    requestHint() {
+      const hint = computeHint(state.caseData, roomCount, state);
+      // La misma pista que ya se estaba mostrando no vuelve a cobrar estrella
+      // (§14.1 no lo dice explícitamente, pero cobrar por pedir de nuevo un
+      // aviso sin haber cambiado nada sería castigar releerlo, no pedir ayuda
+      // nueva; ver docs/DECISIONES.md).
+      if (!hintsEqual(state.hint, hint)) {
+        state.hint = hint;
+        state.hintExplained = false;
+        if (hint.kind !== 'done') state.hintsUsed += 1;
+      }
+      notify();
+    },
+    explainHint() {
+      state.hintExplained = true;
+      notify();
     },
   };
 }

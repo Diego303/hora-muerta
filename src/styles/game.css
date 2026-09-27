@@ -288,8 +288,8 @@
   font-weight: 700;
 }
 .sw {
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: 3px solid var(--panel);
   box-shadow: 0 0 0 2px var(--grid);
@@ -337,9 +337,9 @@
 .sheet-handle {
   flex: none;
   display: flex;
+  align-items: center;
   justify-content: center;
-  padding: 6px 0;
-  min-height: 22px;
+  min-height: 44px;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -387,14 +387,36 @@
 .actionbar {
   flex: none;
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  gap: 8px;
   padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
   border-top: 2px solid var(--wall);
   background: var(--paper);
 }
-.actionbar .btn {
+.actionbar-buttons {
+  display: flex;
+  gap: 10px;
+}
+.actionbar-buttons .btn {
   flex: 1;
   justify-content: center;
+}
+
+/* Pista del inspector (§15): empujón y, si aplica, "Explícamelo". */
+.hint-panel {
+  border: 2px solid var(--grid);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+}
+.hint-panel p {
+  margin: 0 0 4px;
+}
+.hint-panel .link {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 700;
+  min-height: 44px;
 }
 
 .plan-expand-btn {
@@ -537,13 +559,12 @@
 }
 .clue-check {
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  height: 44px;
   min-height: 0;
   border: 2px solid var(--grid);
   border-radius: 3px;
   background: var(--paper);
-  margin-top: 2px;
 }
 .clue-check[aria-pressed='true']::after {
   content: '✓';
@@ -614,8 +635,8 @@
   text-align: center;
 }
 .objtable .cell {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   min-height: 0;
   border: 1px solid var(--grid);
   background: var(--paper);

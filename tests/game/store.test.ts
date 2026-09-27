@@ -42,9 +42,16 @@ const CASE: CaseDef = {
   sig: 'test',
 };
 
+/** El algoritmo de pistas (game/hints.ts) tiene sus propias pruebas; aquí basta
+ * un `computeHint` fijo, ya que createGameStore lo recibe por dependencia
+ * para evitar un ciclo de imports con game/hints.ts (ver docs/DECISIONES.md). */
+function createStore() {
+  return createGameStore(CASE, 8, () => ({ kind: 'done' }));
+}
+
 describe('game/store', () => {
   it('empieza en la hora 0, modo marcar, sin marcas ni trazos', () => {
-    const store = createGameStore(CASE);
+    const store = createStore();
     const state = store.getState();
     expect(state.hour).toBe(0);
     expect(state.mode).toBe('mark');
@@ -54,7 +61,7 @@ describe('game/store', () => {
   });
 
   it('mark() rota sin marca -> estaba -> no estaba -> sin marca, para el sospechoso elegido y la hora actual', () => {
-    const store = createGameStore(CASE);
+    const store = createStore();
     store.selectSuspect(2);
     store.setHour(1);
     const key = markKey(1, 5, 2);
@@ -68,14 +75,14 @@ describe('game/store', () => {
   });
 
   it('mark() no hace nada fuera del modo marcar', () => {
-    const store = createGameStore(CASE);
+    const store = createStore();
     store.setMode('view');
     store.mark(3);
     expect(store.getState().marks.size).toBe(0);
   });
 
   it('setMode limpia el filtro de Ver al cambiar de modo', () => {
-    const store = createGameStore(CASE);
+    const store = createStore();
     store.setMode('view');
     store.setFilter({ type: 'room', r: 4 });
     expect(store.getState().filter).toEqual({ type: 'room', r: 4 });
@@ -84,7 +91,7 @@ describe('game/store', () => {
   });
 
   it('undo revierte la última marca', () => {
-    const store = createGameStore(CASE);
+    const store = createStore();
     const key = markKey(0, 5, 0);
     store.mark(5);
     store.mark(5);
@@ -96,13 +103,13 @@ describe('game/store', () => {
   });
 
   it('undo sin nada que deshacer no lanza ni cambia el estado', () => {
-    const store = createGameStore(CASE);
+    const store = createStore();
     expect(() => store.undo()).not.toThrow();
     expect(store.getState().marks.size).toBe(0);
   });
 
   it('addStroke añade un trazo y undo lo retira', () => {
-    const store = createGameStore(CASE);
+    const store = createStore();
     store.addStroke({ color: 'ink', hour: 0, points: [[0, 0], [10, 10]] });
     expect(store.getState().strokes).toHaveLength(1);
     store.undo();
@@ -110,7 +117,7 @@ describe('game/store', () => {
   });
 
   it('eraseStrokeNear borra el trazo más cercano dentro del radio, respetando la hora', () => {
-    const store = createGameStore(CASE);
+    const store = createStore();
     store.addStroke({ color: 'ink', hour: 0, points: [[0, 0]] });
     store.addStroke({ color: 'amber', hour: 1, points: [[0, 0]] });
     store.addStroke({ color: 'pencil', hour: 'all', points: [[100, 100]] });
@@ -124,14 +131,14 @@ describe('game/store', () => {
   });
 
   it('eraseStrokeNear no borra nada si no hay trazo dentro del radio', () => {
-    const store = createGameStore(CASE);
+    const store = createStore();
     store.addStroke({ color: 'ink', hour: 0, points: [[0, 0]] });
     store.eraseStrokeNear([500, 500], 5);
     expect(store.getState().strokes).toHaveLength(1);
   });
 
   it('clearHourStrokes solo borra los trazos de la hora actual, y undo los devuelve', () => {
-    const store = createGameStore(CASE);
+    const store = createStore();
     store.addStroke({ color: 'ink', hour: 0, points: [[0, 0]] });
     store.addStroke({ color: 'ink', hour: 1, points: [[1, 1]] });
     store.clearHourStrokes();
@@ -141,7 +148,7 @@ describe('game/store', () => {
   });
 
   it('toggleSheet alterna entre media y desplegada; setSheetTab siempre vuelve a media', () => {
-    const store = createGameStore(CASE);
+    const store = createStore();
     store.toggleSheet();
     expect(store.getState().sheetState).toBe('desplegada');
     store.toggleSheet();
@@ -153,7 +160,7 @@ describe('game/store', () => {
   });
 
   it('subscribe notifica en cada acción y deja de notificar tras darse de baja', () => {
-    const store = createGameStore(CASE);
+    const store = createStore();
     const listener = vi.fn();
     const unsubscribe = store.subscribe(listener);
     store.setHour(1);
@@ -170,7 +177,7 @@ describe('game/store', () => {
     });
 
     it('toggleStrike tacha/destacha una pista y undo lo revierte', () => {
-      const store = createGameStore(CASE);
+      const store = createStore();
       store.toggleStrike(3);
       expect(store.getState().struck.has(3)).toBe(true);
       store.undo();
@@ -178,7 +185,7 @@ describe('game/store', () => {
     });
 
     it('focusClue fija el foco y devuelve la hoja a estado media', () => {
-      const store = createGameStore(CASE);
+      const store = createStore();
       store.toggleSheet();
       expect(store.getState().sheetState).toBe('desplegada');
       store.focusClue(2);
@@ -187,7 +194,7 @@ describe('game/store', () => {
     });
 
     it('discardSuspect alterna el descarte y undo lo revierte', () => {
-      const store = createGameStore(CASE);
+      const store = createStore();
       store.discardSuspect(2);
       expect(store.getState().discarded.has(2)).toBe(true);
       store.undo();
@@ -195,7 +202,7 @@ describe('game/store', () => {
     });
 
     it('cycleObjGrid rota vacío -> ✓ -> ✗ -> vacío; con autocompletar (por defecto) un ✓ rellena el resto de la fila y la columna con ✗', () => {
-      const store = createGameStore(CASE);
+      const store = createStore();
       store.cycleObjGrid(0, 1);
       const g = store.getState().objGrid;
       expect(g.get(objGridKey(0, 1))).toBe(1);
@@ -210,7 +217,7 @@ describe('game/store', () => {
     });
 
     it('cycleObjGrid: undo deshace la celda tocada y todo lo autocompletado en el mismo toque', () => {
-      const store = createGameStore(CASE);
+      const store = createStore();
       store.cycleObjGrid(0, 1);
       store.undo();
       expect(store.getState().objGrid.size).toBe(0);
@@ -219,7 +226,7 @@ describe('game/store', () => {
     it('sin autocompletar (ajuste desactivado), cycleObjGrid solo toca la celda pulsada', () => {
       // @ts-expect-error se sustituye por una implementación en memoria solo para la prueba
       globalThis.localStorage = new FixedStorage(JSON.stringify({ autoGrid: false }));
-      const store = createGameStore(CASE);
+      const store = createStore();
       store.cycleObjGrid(0, 1);
       const g = store.getState().objGrid;
       expect(g.size).toBe(1);
@@ -229,7 +236,7 @@ describe('game/store', () => {
 
   describe('acusación (§14.1, §14.3)', () => {
     it('acusar sin haber elegido culpable y arma no cambia el resultado', () => {
-      const store = createGameStore(CASE);
+      const store = createStore();
       const outcome = store.accuse();
       expect(outcome.correct).toBe(false);
       expect(store.getState().result).toBe('playing');
@@ -237,7 +244,7 @@ describe('game/store', () => {
     });
 
     it('una acusación correcta resuelve el caso', () => {
-      const store = createGameStore(CASE);
+      const store = createStore();
       store.setAccuseCulprit(CASE.culprit);
       store.setAccuseWeapon(CASE.weapon);
       const outcome = store.accuse();
@@ -246,7 +253,7 @@ describe('game/store', () => {
     });
 
     it('dos acusaciones erróneas archivan el caso sin resolver', () => {
-      const store = createGameStore(CASE);
+      const store = createStore();
       store.setAccuseCulprit((CASE.culprit + 1) % CASE.N);
       store.setAccuseWeapon(CASE.weapon);
       const first = store.accuse();

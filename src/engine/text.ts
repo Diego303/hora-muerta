@@ -405,3 +405,61 @@ export function keyDeductionText(caseData: CaseDef, ctx: ClueTextContext): strin
       return '';
   }
 }
+
+export interface StepFocus {
+  rooms: Room[];
+  hour: Hour | null;
+  suspects: Sus[];
+}
+
+/** Dónde y sobre quién resaltar en el plano para un paso (pista del inspector, §15.1),
+ * a partir solo de sus conclusiones: no hace falta un interruptor por regla porque
+ * `Conclusion` ya dice de qué sala/hora/sospechoso se trata en cada caso. */
+export function stepFocus(step: Step, caseData: CaseDef): StepFocus {
+  const rooms = new Set<Room>();
+  const suspects = new Set<Sus>();
+  let hour: Hour | null = null;
+  for (const c of step.concl) {
+    switch (c.k) {
+      case 'notRoom':
+      case 'isRoom':
+        rooms.add(c.r);
+        suspects.add(c.c);
+        hour = c.t;
+        break;
+      case 'notCarry':
+      case 'carry':
+        suspects.add(c.c);
+        break;
+      case 'notCulprit':
+      case 'culprit':
+        suspects.add(c.c);
+        rooms.add(caseData.rv);
+        hour = caseData.td;
+        break;
+    }
+  }
+  return { rooms: [...rooms], hour, suspects: [...suspects] };
+}
+
+function joinNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? '';
+  return `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}`;
+}
+
+/** El empujón (fase 1, §15.1/Apéndice C): "Fíjate en {pistas} y en {sospechoso o sala} a
+ * las {hora}." Nunca da la conclusión, solo apunta dónde mirar. */
+export function hintPush(step: Step, caseData: CaseDef, ctx: ClueTextContext): string {
+  const suspect = (s: Sus): string => who(ctx.suspects[s]);
+  const focus = stepFocus(step, caseData);
+  const pistaPart = step.cl.length ? `${pistaRef(step.cl)} y en ` : '';
+  const names = focus.suspects.map(suspect);
+  const whoText = names.length ? joinNames(names) : null;
+  if (focus.hour !== null && whoText) {
+    return `Fíjate en ${pistaPart}dónde podía estar ${whoText} a las ${timeSpan(focus.hour)}.`;
+  }
+  if (whoText) {
+    return `Fíjate en ${pistaPart}qué llevaba ${whoText}.`;
+  }
+  return `Fíjate en ${pistaPart}las pistas ya reveladas.`;
+}

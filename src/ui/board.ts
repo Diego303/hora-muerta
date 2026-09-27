@@ -4,8 +4,9 @@
 import { VICTIMS } from '../engine/content/cast';
 import { MAPS } from '../engine/content/maps';
 import { buildTextContext } from '../engine/generate';
-import { timeLabel } from '../engine/text';
+import { hintPush, stepExplanation, stepFocus, timeLabel } from '../engine/text';
 import type { CaseDef, MapDef, Room } from '../engine/types';
+import { nextHint } from '../game/hints';
 import { computeStars } from '../game/scoring';
 import type { ChalkColor, MarkValue } from '../game/store';
 import { createGameStore, markKey } from '../game/store';
@@ -17,7 +18,6 @@ import { renderClosure } from './closure';
 import { renderObjectsTable } from './objects';
 import { buildPlan } from './plan';
 import type { PlanHandle, SuspectView } from './plan';
-import { toast } from './toast';
 
 export interface BoardOptions {
   onExit: () => void;
@@ -46,7 +46,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   const map = findMap(caseData.map);
   const textCtx = buildTextContext(map, caseData.cast, caseData.objects);
   const suspects: SuspectView[] = textCtx.suspects.map((s) => ({ name: s.name, init: s.name[0], color: s.color }));
-  const store = createGameStore(caseData);
+  const store = createGameStore(caseData, map.rooms.length, nextHint);
 
   root.innerHTML = `
     <div class="game" id="gameRoot" data-case-id="${caseData.id}">
@@ -80,8 +80,14 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
         <div class="sheet-body" id="sheetBody"></div>
       </div>
       <div class="actionbar">
-        <button class="btn ghost" id="hintBtn">Pista</button>
-        <button class="btn" id="accuseBtn">Acusar</button>
+        <div class="hint-panel" id="hintPanel" hidden>
+          <p id="hintText"></p>
+          <button class="link" id="hintExplainBtn" hidden>Explícamelo</button>
+        </div>
+        <div class="actionbar-buttons">
+          <button class="btn ghost" id="hintBtn">Pista</button>
+          <button class="btn" id="accuseBtn">Acusar</button>
+        </div>
       </div>
     </div>
   `;
@@ -96,6 +102,9 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   const hintEl = requireEl<HTMLParagraphElement>(root, '#hint');
   const legendEl = requireEl<HTMLDivElement>(root, '#legend');
   const sheetBody = requireEl<HTMLDivElement>(root, '#sheetBody');
+  const hintPanel = requireEl<HTMLDivElement>(root, '#hintPanel');
+  const hintText = requireEl<HTMLParagraphElement>(root, '#hintText');
+  const hintExplainBtn = requireEl<HTMLButtonElement>(root, '#hintExplainBtn');
 
   const victimRoom = map.rooms[caseData.rv];
   const victimName = VICTIMS[caseData.victim];
@@ -146,7 +155,19 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     cleanup();
     options.onExit();
   });
-  root.querySelector('#hintBtn')?.addEventListener('click', () => toast('La pista del inspector llega en el hito M6.'));
+  root.querySelector('#hintBtn')?.addEventListener('click', () => {
+    store.requestHint();
+    // Fase 1 ya cambia la hora a la implicada (§15.1): "se resaltan en el
+    // plano las salas y la hora implicadas".
+    const hint = store.getState().hint;
+    if (hint?.kind === 'step') {
+      const focus = stepFocus(caseData.solve.steps[hint.stepIndex], caseData);
+      if (focus.hour !== null) store.setHour(focus.hour);
+    } else if (hint?.kind === 'markError' && hint.hour !== null) {
+      store.setHour(hint.hour);
+    }
+  });
+  hintExplainBtn.addEventListener('click', () => store.explainHint());
   root.querySelector('#accuseBtn')?.addEventListener('click', () => {
     openAccuseSheet(textCtx, store, () => showClosure());
   });
@@ -236,6 +257,28 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     }
   }
 
+  function renderHint(): void {
+    const state = store.getState();
+    const hint = state.hint;
+    if (!hint) {
+      hintPanel.hidden = true;
+      return;
+    }
+    hintPanel.hidden = false;
+    if (hint.kind === 'done') {
+      hintText.textContent = 'Ya tienes todo lo necesario. Revisa quién pudo estar a solas con la víctima.';
+      hintExplainBtn.hidden = true;
+    } else if (hint.kind === 'markError') {
+      const where = hint.hour !== null ? ` de las ${timeLabel(hint.hour)}` : hint.obj !== null ? ' de la tabla de objetos' : '';
+      hintText.textContent = `Una de tus marcas${where} no encaja con las pistas.`;
+      hintExplainBtn.hidden = true;
+    } else {
+      const step = caseData.solve.steps[hint.stepIndex];
+      hintText.innerHTML = state.hintExplained ? stepExplanation(step, hint.stepIndex, caseData.solve.steps, caseData, textCtx) : hintPush(step, caseData, textCtx);
+      hintExplainBtn.hidden = state.hintExplained;
+    }
+  }
+
   function draw(): void {
     const state = store.getState();
     plan.setCrime(state.hour === caseData.td);
@@ -251,6 +294,8 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
       }
     }
     if (state.clueFocus !== null) highlightRooms = highlightRooms.concat(clueFocusTarget(caseData.clues[state.clueFocus]).rooms);
+    if (state.hint?.kind === 'step') highlightRooms = highlightRooms.concat(stepFocus(caseData.solve.steps[state.hint.stepIndex], caseData).rooms);
+    else if (state.hint?.kind === 'markError' && state.hint.room !== null) highlightRooms.push(state.hint.room);
     plan.highlight(highlightRooms);
 
     const prevHour = state.hour > 0 ? state.hour - 1 : null;
@@ -274,6 +319,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     starsDisplay.textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
     renderSubtools();
     renderSheet();
+    renderHint();
     draw();
   }
 
