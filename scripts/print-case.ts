@@ -24,9 +24,9 @@ function main(): void {
     return;
   }
 
-  const ctx = buildTextContext(candidate.map, candidate.castIndices, candidate.objectIndices);
+  const ctx = buildTextContext(candidate.map, candidate.cast, candidate.objects);
   const crimeRoom = candidate.map.rooms[candidate.rv];
-  const culpritName = CAST[candidate.castIndices[candidate.culprit]].name;
+  const culpritName = CAST[candidate.cast[candidate.culprit]].name;
 
   console.log(`Hora Muerta — ${DIFF_NAMES[diff]} — semilla "${seed}"`);
   console.log(`Escenario: ${candidate.map.name} (${candidate.map.place})`);
@@ -44,6 +44,9 @@ function main(): void {
   });
   console.log('');
   console.log(`Solución: ${culpritName} llevaba ${ctx.objects[candidate.weapon].name}. Motivo: ${MOTIVES[candidate.motive]}.`);
+  console.log(
+    `Solver humano: nivel máximo ${candidate.solve.maxLv}, puntuación ${candidate.solve.score}, arquetipos [${candidate.solve.arch.join(', ')}], ${candidate.solve.steps.length} pasos críticos.`,
+  );
 }
 
 main();

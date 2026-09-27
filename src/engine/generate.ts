@@ -1,8 +1,9 @@
-// generarCaso() (§7.1). Este hito (M1) implementa los pasos 1-8 y 11 de la
-// tubería (mapa/reparto/noche/reserva/selección guiada/minimización/topes y
-// longitud/cortesía/orden); los pasos 9-10 (solver humano, puntuación,
-// arquetipos) llegan en M2/M3 y completan CaseDef con `solve` y `sig`. Por eso
-// esta función devuelve un CaseCandidate, no un CaseDef todavía.
+// generarCaso() (§7.1), completo: pasos 1-11 de la tubería (mapa/reparto/noche/
+// reserva/selección guiada/minimización/topes y longitud/cortesía/solver
+// humano/puntuación/orden y firma). Devuelve un CaseDraft: todo lo de CaseDef
+// salvo `id`, `mode` (los asigna quien coloca el caso en un grupo del banco,
+// scripts/build-bank.ts en M3) y con `map` como MapDef completo en vez de solo
+// su id (más cómodo para el resto de la tubería; ver docs/DECISIONES.md).
 import type { ObjectDef } from './content/cast';
 import { CAST, CHIP_COLORS, MOTIVES, OBJECTS, VICTIMS } from './content/cast';
 import { MAPS } from './content/maps';
@@ -21,13 +22,15 @@ import type { DiffIndex } from './clues';
 import { checkUnique } from './exact';
 import type { SolveContext } from './exact';
 import { buildGraph } from './graph';
+import { solveHuman } from './human';
+import type { HumanContext } from './human';
 import { enumeratePaths } from './paths';
 import type { Rng } from './rng';
-import { pick, rngFromSeed, shuffle } from './rng';
+import { fnv1a, pick, rngFromSeed, shuffle } from './rng';
 import type { ClueTextContext } from './text';
 import { clueText, plainText } from './text';
 import { buildTruth, generateNight, generateObjectAssignment, planNight } from './truth';
-import type { Clue, ClueKind, MapDef, MapId, Truth } from './types';
+import type { CaseDef, Clue, ClueKind, MapDef, MapId, Step, Truth } from './types';
 
 export interface DifficultyParams {
   N: number;
@@ -37,12 +40,33 @@ export interface DifficultyParams {
   courtesyClues: number;
 }
 
-/** N, T y número de pistas por dificultad (§11). Los niveles de razonamiento y las
- * bandas de puntuación se aplican en M2/M3, cuando exista el solver humano. */
+/** N, T y número de pistas por dificultad (§11). */
 export const DIFFICULTY: Record<DiffIndex, DifficultyParams> = {
   0: { N: 4, T: 3, minClues: 5, maxClues: 7, courtesyClues: 1 },
   1: { N: 5, T: 3, minClues: 7, maxClues: 10, courtesyClues: 0 },
   2: { N: 5, T: 4, minClues: 10, maxClues: 14, courtesyClues: 0 },
+};
+
+interface LevelGate {
+  minLevel: 1 | 2 | 3 | 4 | 5 | 6;
+  maxLevel: 1 | 2 | 3 | 4 | 5 | 6;
+  /** Tope de pasos críticos en `capLevel` (Novato: como mucho 1 de nivel 4; Comisario: como mucho 2 de nivel 6). */
+  capLevel?: 1 | 2 | 3 | 4 | 5 | 6;
+  capCount?: number;
+}
+
+/** Nivel máximo permitido y requisito mínimo de la cadena crítica (§11). */
+const LEVEL_GATE: Record<DiffIndex, LevelGate> = {
+  0: { minLevel: 3, maxLevel: 4, capLevel: 4, capCount: 1 },
+  1: { minLevel: 4, maxLevel: 5 },
+  2: { minLevel: 5, maxLevel: 6, capLevel: 6, capCount: 2 },
+};
+
+/** Banda de puntuación inicial (§11); se recalibra con `bank-report` en M3 si hace falta. */
+const SCORE_BAND: Record<DiffIndex, [number, number]> = {
+  0: [8, 25],
+  1: [22, 60],
+  2: [55, 140],
 };
 
 const GENERATION_ATTEMPTS = 40;
@@ -51,23 +75,7 @@ const SELECT_LIMIT = 15000;
 const MINIMIZE_LIMIT = 4000;
 const COURTESY_TYPES: ClueKind[] = ['at', 'ncarry', 'together'];
 
-export interface CaseCandidate {
-  map: MapDef;
-  /** Índices en CAST, ya ordenados alfabéticamente (§4.2: el color de ficha sigue este orden). */
-  castIndices: number[];
-  /** Índices en OBJECTS. */
-  objectIndices: number[];
-  victim: number;
-  motive: number;
-  N: number;
-  T: number;
-  rv: number;
-  td: number;
-  culprit: number;
-  weapon: number;
-  truth: Truth;
-  clues: Clue[];
-}
+export type CaseDraft = Omit<CaseDef, 'id' | 'mode' | 'map'> & { map: MapDef };
 
 function clueScore(clue: Clue, diff: DiffIndex): number {
   return CLUE_WEIGHTS[diff][clue.k] * CLUE_STRENGTH[clue.k] ** 2;
@@ -155,12 +163,33 @@ export function buildTextContext(map: MapDef, castIndices: number[], objectIndic
   };
 }
 
+/** Nivel máximo permitido, requisito mínimo y tope de pasos en el nivel más alto (§11). */
+function meetsLevelGate(diff: DiffIndex, maxLv: number, criticalSteps: Step[]): boolean {
+  const gate = LEVEL_GATE[diff];
+  if (maxLv < gate.minLevel || maxLv > gate.maxLevel) return false;
+  if (gate.capLevel !== undefined && gate.capCount !== undefined) {
+    const countAtCap = criticalSteps.filter((s) => s.lv === gate.capLevel).length;
+    if (countAtCap > gate.capCount) return false;
+  }
+  return true;
+}
+
+/** Firma estructural (§12.4): dos casos con la misma firma son la misma noche con otros nombres. */
+function computeSignature(mapId: MapId, rv: number, td: number, truth: Truth, culprit: number): string {
+  const sortedPaths = truth.rooms.map((path) => path.join('-')).slice().sort();
+  const culpritPath = truth.rooms[culprit].join('-');
+  return fnv1a(`${mapId}|${rv}|${td}|${sortedPaths.join(';')}|${culpritPath}`).toString(36);
+}
+
 /**
- * Tubería de generación (§7.1). Determinista: la misma semilla produce el mismo
- * candidato. Devuelve null si los 40 intentos se agotan sin producir un caso
- * que cumpla topes, longitud de lectura y mínimo de movimiento.
+ * Tubería de generación completa (§7.1). Determinista: la misma semilla
+ * produce el mismo candidato. Devuelve null si los 40 intentos se agotan sin
+ * producir un caso que cumpla topes, longitud de lectura, mínimo de
+ * movimiento, y que el solver humano resuelva dentro del nivel y la banda de
+ * puntuación de la dificultad (rechaza los que se atascan, incluidos los que
+ * solo se resolverían con R6_HYPOTHESIS: ver docs/DECISIONES.md).
  */
-export function buildCaseCandidate(seed: string, diff: DiffIndex, mapId?: MapId): CaseCandidate | null {
+export function buildCaseCandidate(seed: string, diff: DiffIndex, mapId?: MapId): CaseDraft | null {
   const params = DIFFICULTY[diff];
   const fixedMap = mapId ? MAPS.find((m) => m.id === mapId) : undefined;
   if (mapId && !fixedMap) throw new Error(`Mapa desconocido: ${mapId}`);
@@ -220,10 +249,25 @@ export function buildCaseCandidate(seed: string, diff: DiffIndex, mapId?: MapId)
       clues = clues.concat(courtesyCandidates.slice(0, params.courtesyClues));
     }
 
+    const finalClues = sortClues(clues);
+    const humanCtx: HumanContext = { N: params.N, T: params.T, graph, rv: plan.rv, td: plan.td };
+    const solved = solveHuman(humanCtx, finalClues);
+    if (!solved) continue; // atascado: el caso exige más de lo que el solver humano sabe hacer
+
+    const criticalSteps = solved.steps.filter((s) => s.crit);
+    if (!meetsLevelGate(diff, solved.maxLv, criticalSteps)) continue;
+    const [scoreMin, scoreMax] = SCORE_BAND[diff];
+    if (solved.score < scoreMin || solved.score > scoreMax) continue;
+
+    const keyStep = solved.steps[solved.key];
+    const key = criticalSteps.indexOf(keyStep);
+
     return {
+      v: 2,
+      diff,
       map,
-      castIndices,
-      objectIndices,
+      cast: castIndices,
+      objects: objectIndices,
       victim,
       motive,
       N: params.N,
@@ -233,7 +277,15 @@ export function buildCaseCandidate(seed: string, diff: DiffIndex, mapId?: MapId)
       culprit: plan.culprit,
       weapon,
       truth,
-      clues: sortClues(clues),
+      clues: finalClues,
+      solve: {
+        steps: criticalSteps,
+        key: key >= 0 ? key : 0,
+        arch: solved.arch,
+        maxLv: solved.maxLv,
+        score: solved.score,
+      },
+      sig: computeSignature(map.id, plan.rv, plan.td, truth, plan.culprit),
     };
   }
   return null;
