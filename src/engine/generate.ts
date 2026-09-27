@@ -158,7 +158,7 @@ export function buildTextContext(map: MapDef, castIndices: number[], objectIndic
     rooms: map.rooms,
     features: map.features,
     unit: map.unit,
-    suspects: castIndices.map((i, idx) => ({ name: CAST[i].name, color: CHIP_COLORS[idx] })),
+    suspects: castIndices.map((i, idx) => ({ name: CAST[i].name, color: CHIP_COLORS[idx], role: CAST[i].role })),
     objects: objectIndices.map((i): ObjectDef => OBJECTS[i]),
   };
 }

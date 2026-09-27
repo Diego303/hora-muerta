@@ -41,8 +41,15 @@ export interface PlanHandle {
   hits: SVGRectElement[];
   setCrime(on: boolean): void;
   marks(get: (room: number, suspect: number) => MarkValue, suspects: SuspectView[]): void;
-  highlight(room: number | null): void;
+  /** Resalta las salas dadas (filtro de Ver, o pista enfocada en la lista, §17.6). */
+  highlight(rooms: number[]): void;
   tokens(roomsAt: number[] | null, suspects: SuspectView[], show: boolean): void;
+  /** Estela (§17.4): las ✓ de la hora anterior (trazo discontinuo) y siguiente
+   * (trazo punteado) de cada sospechoso, al 45% de opacidad. `null` en vez de
+   * un getter significa "sin esa hora" (p. ej. no hay hora anterior a la 21:00). */
+  trail(prev: ((room: number, suspect: number) => MarkValue) | null, next: ((room: number, suspect: number) => MarkValue) | null, suspects: SuspectView[]): void;
+  /** Ayuda de movimiento (§17.4): rayado suave en las salas dadas (a las que no se pudo llegar). */
+  hatchRooms(rooms: number[]): void;
 }
 
 interface RoomRect {
@@ -80,13 +87,20 @@ export function buildPlan(svg: SVGSVGElement, map: MapDef, opts: PlanOptions): P
   const height = map.h * GRID + PAD * 2;
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
 
+  const gDefs = svgEl('defs', {}, svg);
   const gRooms = svgEl('g', {}, svg);
   const gDoors = svgEl('g', {}, svg);
   const gLabels = svgEl('g', {}, svg);
   const gCrime = svgEl('g', {}, svg);
+  const gHatch = svgEl('g', {}, svg);
+  const gTrail = svgEl('g', {}, svg);
   const gMarks = svgEl('g', {}, svg);
   const gTokens = svgEl('g', {}, svg);
   const gHits = svgEl('g', {}, svg);
+
+  const hatchPatternId = `hm-hatch-${Math.random().toString(36).slice(2, 8)}`;
+  const hatchPattern = svgEl('pattern', { id: hatchPatternId, width: 6, height: 6, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, gDefs);
+  svgEl('line', { x1: 0, y1: 0, x2: 0, y2: 6, class: 'hatch-line' }, hatchPattern);
 
   const rects: RoomRect[] = map.rooms.map((r) => ({
     x: PAD + r.x * GRID + INSET,
@@ -205,11 +219,39 @@ export function buildPlan(svg: SVGSVGElement, map: MapDef, opts: PlanOptions): P
         }
       });
     },
-    highlight(room) {
+    highlight(rooms) {
       gMarks.querySelectorAll('.hlroom').forEach((n) => n.remove());
-      if (room == null) return;
-      const rect = rects[room];
-      svgEl('rect', { x: rect.x + 3, y: rect.y + 3, width: rect.w - 6, height: rect.h - 6, class: 'hlroom' }, gMarks);
+      for (const room of rooms) {
+        const rect = rects[room];
+        svgEl('rect', { x: rect.x + 3, y: rect.y + 3, width: rect.w - 6, height: rect.h - 6, class: 'hlroom' }, gMarks);
+      }
+    },
+    trail(prev, next, suspects) {
+      gTrail.innerHTML = '';
+      const draw = (get: (room: number, suspect: number) => MarkValue, dash: string, extraClass: string): void => {
+        rects.forEach((rect, r) => {
+          let slot = 0;
+          for (let c = 0; c < suspects.length; c++) {
+            if (get(r, c) !== 1) continue;
+            const [x, y] = roomSlot(rect, slot);
+            slot += 1;
+            svgEl(
+              'circle',
+              { cx: x, cy: y, r: 8, class: `trail ${extraClass}`, stroke: suspects[c].color, 'stroke-dasharray': dash },
+              gTrail,
+            );
+          }
+        });
+      };
+      if (prev) draw(prev, '3 2', 'prev');
+      if (next) draw(next, '1 2.4', 'next');
+    },
+    hatchRooms(rooms) {
+      gHatch.innerHTML = '';
+      for (const r of rooms) {
+        const rect = rects[r];
+        svgEl('rect', { x: rect.x, y: rect.y, width: rect.w, height: rect.h, fill: `url(#${hatchPatternId})`, class: 'hatch' }, gHatch);
+      }
     },
     tokens(roomsAt, suspects, show) {
       if (!show || !roomsAt) {

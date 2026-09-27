@@ -1,12 +1,18 @@
 // Portada (§17.2.1), fielmente portada de v1: héroe con plano animado, "Tres reglas,
-// nada más" y selector de nivel. El generador de casos real llega en M1: por ahora
-// los botones de nivel y de caso del día muestran un aviso.
+// nada más" y selector de nivel. "Caso suelto" sirve el siguiente caso del banco del
+// nivel elegido (§13); el caso del día real llega en el hito M7.
 import { CHIP_COLORS } from '../engine/content/cast';
 import { MAPS } from '../engine/content/maps';
+import type { CaseDef, MapId } from '../engine/types';
+import { loadBank, modeForDiff } from '../game/bank';
 import { startDemo } from './demo';
 import { toast } from './toast';
 
-export function renderLanding(root: HTMLElement): () => void {
+export interface LandingOptions {
+  onStart: (caseData: CaseDef) => void;
+}
+
+export function renderLanding(root: HTMLElement, options: LandingOptions): () => void {
   root.innerHTML = `
     <div class="wrap">
       <header class="top">
@@ -80,25 +86,52 @@ export function renderLanding(root: HTMLElement): () => void {
     </div>
   `;
 
+  let selectedMap: MapId | null = null;
   const mapSel = root.querySelector<HTMLDivElement>('#mapSel');
   if (mapSel) {
-    const options: { id: string | null; name: string }[] = [
+    const mapOptions: { id: MapId | null; name: string }[] = [
       { id: null, name: 'Cualquier lugar' },
-      ...MAPS.map((m) => ({ id: m.id as string | null, name: m.name })),
+      ...MAPS.map((m) => ({ id: m.id, name: m.name })),
     ];
-    for (const opt of options) {
+    for (const opt of mapOptions) {
       const chip = document.createElement('button');
       chip.className = 'chip';
       chip.textContent = opt.name;
       chip.setAttribute('aria-pressed', String(opt.id === null));
+      chip.addEventListener('click', () => {
+        selectedMap = opt.id;
+        mapSel.querySelectorAll<HTMLButtonElement>('.chip').forEach((c) => c.setAttribute('aria-pressed', String(c === chip)));
+      });
       mapSel.appendChild(chip);
     }
   }
 
   root.querySelectorAll<HTMLButtonElement>('[data-lv]').forEach((button) => {
-    button.addEventListener('click', () => toast('El generador de casos llega en el hito M1.'));
+    button.addEventListener('click', () => {
+      const diff = Number(button.dataset.lv);
+      if (diff !== 0 && diff !== 1 && diff !== 2) return;
+      void startCase(diff, button);
+    });
   });
   root.querySelector('#goDaily')?.addEventListener('click', () => toast('El caso del día llega en el hito M7.'));
+
+  async function startCase(diff: 0 | 1 | 2, button: HTMLButtonElement): Promise<void> {
+    button.disabled = true;
+    try {
+      const bank = await loadBank(modeForDiff(diff));
+      const pool = selectedMap ? bank.cases.filter((c) => c.map === selectedMap) : bank.cases;
+      if (pool.length === 0) {
+        toast('Todavía no hay casos de ese nivel disponibles.');
+        return;
+      }
+      const caseData = pool[Math.floor(Math.random() * pool.length)];
+      options.onStart(caseData);
+    } catch {
+      toast('No se ha podido cargar el caso. Comprueba tu conexión e inténtalo de nuevo.');
+    } finally {
+      button.disabled = false;
+    }
+  }
 
   const demoMap = root.querySelector<SVGSVGElement>('#demoMap');
   const demoClock = root.querySelector<HTMLElement>('#demoClock');
