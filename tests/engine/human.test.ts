@@ -131,11 +131,18 @@ describe('solver humano: solidez y coherencia en casos generados (§20)', () => 
 
           // candidate.solve.steps ya es la cadena crítica que calculó buildCaseCandidate
           // (no hace falta volver a resolver con solveHuman: sería trabajo redundante).
-          for (const step of candidate.solve.steps) {
+          candidate.solve.steps.forEach((step, idx) => {
             for (const concl of step.concl) {
               expect(isConclusionSound(concl, candidate.truth, candidate.culprit)).toBe(true);
             }
-          }
+            // Las premisas están reindexadas a posiciones dentro de esta misma lista
+            // filtrada (ver reindexCriticalSteps en generate.ts): siempre un paso
+            // anterior de la propia cadena, nunca fuera de rango ni hacia delante.
+            for (const p of step.prem) {
+              expect(p).toBeGreaterThanOrEqual(0);
+              expect(p).toBeLessThan(idx);
+            }
+          });
 
           const graph = buildGraph(candidate.map);
           const paths = enumeratePaths(graph.adj, candidate.map.rooms.length, candidate.T);

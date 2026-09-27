@@ -158,9 +158,31 @@ export function solveHuman(ctx: HumanContext, clues: Clue[]): HumanSolution | nu
     return true;
   }
 
-  /** Todos los pasos vistos hasta ahora, como premisas: sobreestimar es aceptable (§9.4). */
-  function allStepsAsPrem(): number[] {
-    return steps.map((_, i) => i);
+  /**
+   * Premisas reales de una hipótesis que llevó a contradicción (§9.2): los pasos
+   * internos de la propagación (índices >= `fromLen`) se van a deshacer con
+   * `restore()`, así que no pueden citarse tal cual en el `Step` final. En vez de
+   * sobreestimar con TODOS los pasos anteriores del caso (inflaba cadenas de
+   * Comisario a 60+ pasos en la práctica, medido al generar; ver
+   * docs/DECISIONES.md), se recorre hacia atrás el `prem` de cada paso interno y
+   * se queda solo con los índices reales (< `fromLen`) a los que en verdad
+   * llegó la propagación: sigue siendo una sobreestimación aceptable (§9.4),
+   * pero mucho más ajustada.
+   */
+  function collectExternalPrem(fromLen: number): number[] {
+    const external = new Set<number>();
+    const visited = new Set<number>();
+    function visit(idx: number): void {
+      if (idx < fromLen) {
+        external.add(idx);
+        return;
+      }
+      if (visited.has(idx)) return;
+      visited.add(idx);
+      for (const p of steps[idx].prem) visit(p);
+    }
+    for (let i = fromLen; i < steps.length; i++) visit(i);
+    return Array.from(external);
   }
 
   interface Snapshot {
@@ -719,11 +741,12 @@ export function solveHuman(ctx: HumanContext, clues: Clue[]): HumanSolution | nu
       const before = snapshot();
       state.cand = bit(c);
       const contradiction = propagateForContradiction(MAX_HYPOTHESIS_STEPS);
+      const hypPrem = contradiction ? collectExternalPrem(before.stepsLength) : [];
       restore(before);
       if (!contradiction) continue;
       const res = applyCand(allSus & ~bit(c));
       if (!res) continue;
-      return commit(6, 'R6_HYPOTHESIS', [], res.concl, allStepsAsPrem());
+      return commit(6, 'R6_HYPOTHESIS', [], res.concl, res.prem.concat(hypPrem));
     }
     return false;
   }
@@ -738,11 +761,12 @@ export function solveHuman(ctx: HumanContext, clues: Clue[]): HumanSolution | nu
           const before = snapshot();
           state.poss[c][t] = bit(r);
           const contradiction = propagateForContradiction(MAX_HYPOTHESIS_STEPS);
+          const hypPrem = contradiction ? collectExternalPrem(before.stepsLength) : [];
           restore(before);
           if (!contradiction) continue;
           const res = applyPoss(c, t, allRooms & ~bit(r));
           if (!res) continue;
-          return commit(6, 'R6_HYPOTHESIS', [], res.concl, allStepsAsPrem());
+          return commit(6, 'R6_HYPOTHESIS', [], res.concl, res.prem.concat(hypPrem));
         }
       }
     }

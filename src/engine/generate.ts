@@ -30,7 +30,7 @@ import { fnv1a, pick, rngFromSeed, shuffle } from './rng';
 import type { ClueTextContext } from './text';
 import { clueText, plainText } from './text';
 import { buildTruth, generateNight, generateObjectAssignment, planNight } from './truth';
-import type { CaseDef, Clue, ClueKind, MapDef, MapId, Truth } from './types';
+import type { CaseDef, Clue, ClueKind, MapDef, MapId, Step, Truth } from './types';
 
 export interface DifficultyParams {
   N: number;
@@ -164,6 +164,35 @@ export function buildTextContext(map: MapDef, castIndices: number[], objectIndic
 }
 
 /**
+ * Filtra a los pasos críticos (§9.4) y reindexa sus `prem` a posiciones dentro
+ * de esa misma lista filtrada: `Step.prem` se rellena en `solveHuman()` con
+ * índices de la cadena COMPLETA (antes de filtrar), así que sin este paso
+ * `CaseDef.solve.steps[i].prem` apuntaría a posiciones equivocadas (o
+ * inexistentes) en cuanto se hubiera descartado algún paso no crítico por el
+ * camino. Todo paso crítico depende solo de otros pasos críticos (así los
+ * marca `reachableBackward()` en human.ts), así que cada premisa siempre debe
+ * encontrar su nueva posición; si no la encuentra es un fallo real del solver,
+ * no un caso a tolerar en silencio.
+ */
+function reindexCriticalSteps(steps: Step[]): Step[] {
+  const indexMap = new Map<number, number>();
+  steps.forEach((s, i) => {
+    if (s.crit) indexMap.set(i, indexMap.size);
+  });
+  const result: Step[] = [];
+  steps.forEach((s, i) => {
+    if (!s.crit) return;
+    const prem = s.prem.map((p) => {
+      const mapped = indexMap.get(p);
+      if (mapped === undefined) throw new Error(`Paso crítico ${i} (${s.rule}) depende de un paso no crítico: no debería ser posible.`);
+      return mapped;
+    });
+    result.push({ ...s, prem });
+  });
+  return result;
+}
+
+/**
  * Nivel máximo permitido, requisito mínimo y tope de pasos en el nivel más alto
  * (§11). `maxLvStepCount` cuenta solo la cadena que identifica al culpable
  * (HumanSolution.maxLvStepCount), no la cadena completa que incluye el arma:
@@ -272,13 +301,16 @@ export function buildCaseCandidate(seed: string, diff: DiffIndex, mapId?: MapId,
     const solved = solveHuman(humanCtx, finalClues);
     if (!solved) continue; // atascado: el caso exige más de lo que el solver humano sabe hacer
 
-    const criticalSteps = solved.steps.filter((s) => s.crit);
     if (!meetsLevelGate(diff, solved.maxLv, solved.maxLvStepCount)) continue;
     const [scoreMin, scoreMax] = SCORE_BAND[diff];
     if (solved.score < scoreMin || solved.score > scoreMax) continue;
 
+    // El orden y el número de pasos críticos son los mismos en `solved.steps.filter(s => s.crit)`
+    // y en `reindexCriticalSteps(solved.steps)`, así que `key` (una posición, no un `prem`) vale
+    // para ambos; solo hace falta el filtro sin reindexar aquí para poder usar indexOf por referencia.
     const keyStep = solved.steps[solved.key];
-    const key = criticalSteps.indexOf(keyStep);
+    const key = solved.steps.filter((s) => s.crit).indexOf(keyStep);
+    const criticalSteps = reindexCriticalSteps(solved.steps);
 
     return {
       v: 2,
