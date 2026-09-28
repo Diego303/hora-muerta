@@ -13,6 +13,21 @@
   width: 100%;
   height: auto;
 }
+/* La tiza vive en un <canvas> superpuesto al SVG (chalk.ts); sin esta regla el
+   canvas no tenía posición propia (quedaba fuera de sitio, del tamaño de su
+   atributo width/height en px físicos) y nunca capturaba el trazo. Solo debe
+   interceptar el puntero en modo tiza: si no, tapa las salas y "Marcar"/"Ver" dejan de funcionar. */
+.plan canvas.chalk {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  pointer-events: none;
+}
+.chalk-mode .plan canvas.chalk {
+  pointer-events: auto;
+}
 
 .room {
   fill: var(--room);
@@ -167,6 +182,18 @@
 }
 .gbar .errs {
   color: var(--pencil);
+}
+
+/* Columna izquierda de la mesa de trabajo como un solo bloque (§17.3): en
+   móvil no cambia nada (sigue apilando en el orden natural dentro de .game,
+   que ya es flex-column); en tablet/escritorio (más abajo) es lo que permite
+   tratarla como una única celda de grid en vez de repartir brief/plan-wrap/
+   tiempos/etc. en filas implícitas adivinadas por el navegador. */
+.game-main {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  min-height: 0;
 }
 
 .brief {
@@ -453,28 +480,26 @@
   .game {
     display: grid;
     grid-template-columns: minmax(0, 1.1fr) minmax(280px, 1fr);
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto 1fr auto;
   }
   .gbar {
     grid-column: 1 / -1;
   }
-  .brief,
-  .plan-wrap,
-  .times,
-  .tools,
-  .subtools,
-  .hint,
-  .legend {
+  .game-main {
     grid-column: 1;
+    grid-row: 2 / -1;
+    min-height: 0;
+    overflow-y: auto;
   }
   .sheet-panel {
     grid-column: 2;
-    grid-row: 2 / span 6;
+    grid-row: 2;
     border-top: 0;
     border-left: 2px solid var(--wall);
   }
   .actionbar {
     grid-column: 2;
+    grid-row: 3;
   }
   .game[data-sheet='desplegada'] .sheet-panel {
     position: static;
@@ -502,14 +527,11 @@
     padding-left: 20px;
     padding-right: 20px;
   }
-  .brief,
-  .plan-wrap,
-  .times,
-  .tools,
-  .subtools,
-  .hint,
-  .legend {
+  .game-main {
     grid-column: 1;
+    grid-row: 2 / -1;
+    min-height: 0;
+    overflow-y: auto;
   }
   .plan-wrap .plan {
     height: 46vh;

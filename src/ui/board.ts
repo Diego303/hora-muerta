@@ -76,21 +76,23 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
         <div class="ttl"><b>${map.name}</b></div>
         <div class="stars" id="starsDisplay">★★★</div>
       </div>
-      <button class="brief" id="brief" type="button"></button>
-      <div class="plan-wrap"><div class="plan" id="planHost"><svg class="map" id="mapSvg"></svg><canvas class="chalk" id="chalkCanvas"></canvas></div></div>
-      <div class="times" id="times" role="group" aria-label="Hora"></div>
-      <div class="tools">
-        <div class="seg" role="group" aria-label="Modo">
-          <button data-mode="mark" aria-pressed="true">Marcar</button>
-          <button data-mode="chalk" aria-pressed="false">Tiza</button>
-          <button data-mode="view" aria-pressed="false">Ver</button>
+      <div class="game-main">
+        <button class="brief" id="brief" type="button"></button>
+        <div class="plan-wrap"><div class="plan" id="planHost"><svg class="map" id="mapSvg"></svg><canvas class="chalk" id="chalkCanvas"></canvas></div></div>
+        <div class="times" id="times" role="group" aria-label="Hora"></div>
+        <div class="tools">
+          <div class="seg" role="group" aria-label="Modo">
+            <button data-mode="mark" aria-pressed="true">Marcar</button>
+            <button data-mode="chalk" aria-pressed="false">Tiza</button>
+            <button data-mode="view" aria-pressed="false">Ver</button>
+          </div>
+          <button class="icon-btn" id="undo" aria-label="Deshacer">↶</button>
+          <button class="icon-btn plan-expand-btn" id="expand" aria-label="Ampliar plano">⤢</button>
         </div>
-        <button class="icon-btn" id="undo" aria-label="Deshacer">↶</button>
-        <button class="icon-btn plan-expand-btn" id="expand" aria-label="Ampliar plano">⤢</button>
+        <div class="subtools" id="subtools"></div>
+        <p class="hint" id="hint"></p>
+        <div class="legend" id="legend"></div>
       </div>
-      <div class="subtools" id="subtools"></div>
-      <p class="hint" id="hint"></p>
-      <div class="legend" id="legend"></div>
       <div class="sheet-panel" id="sheetPanel">
         <button class="sheet-handle" id="sheetHandle" aria-label="Subir o bajar la hoja"><i></i></button>
         <div class="sheet-tabs" role="tablist">
@@ -420,6 +422,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
       expandedPlan.setCrime(state.hour === caseData.td);
       expandedPlan.marks((room, suspect) => (state.marks.get(markKey(state.hour, room, suspect)) ?? 0) as MarkValue, suspects);
       overlay.querySelectorAll<HTMLButtonElement>('#timesExpanded button').forEach((button, i) => button.setAttribute('aria-pressed', String(i === state.hour)));
+      overlay.classList.toggle('chalk-mode', state.mode === 'chalk');
       expandedChalk.redraw();
     };
     const unsub = store.subscribe(redrawExpanded);
