@@ -646,6 +646,11 @@
   border-collapse: collapse;
   width: 100%;
 }
+.objtable th,
+.objtable td {
+  border: 1px solid var(--grid);
+  padding: 0;
+}
 .objtable th {
   font-weight: 700;
   font-size: 0.85rem;
@@ -657,10 +662,12 @@
   text-align: center;
 }
 .objtable .cell {
+  display: block;
   width: 44px;
   height: 44px;
   min-height: 0;
-  border: 1px solid var(--grid);
+  margin: 0 auto;
+  border: 0;
   background: var(--paper);
   font-weight: 700;
 }

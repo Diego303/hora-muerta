@@ -20,7 +20,7 @@ export function renderObjectsTable(container: HTMLElement, ctx: ClueTextContext,
     .map((o, oi) => {
       const cells = Array.from({ length: N }, (_, ci) => {
         const v = (state.objGrid.get(objGridKey(oi, ci)) ?? 0) as 0 | 1 | 2;
-        return `<button class="cell ${MARK_CLASS[v]}" data-o="${oi}" data-c="${ci}" aria-label="${o.label}, ${ctx.suspects[ci].name}: ${MARK_LABEL[v]}">${MARK_SYMBOL[v]}</button>`;
+        return `<td><button class="cell ${MARK_CLASS[v]}" data-o="${oi}" data-c="${ci}" aria-label="${o.label}, ${ctx.suspects[ci].name}: ${MARK_LABEL[v]}">${MARK_SYMBOL[v]}</button></td>`;
       }).join('');
       return `<tr><th>${o.label}</th>${cells}</tr>`;
     })
