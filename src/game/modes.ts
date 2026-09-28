@@ -48,3 +48,8 @@ export function recordDailyResult(dateKey: string, result: DailyResult): void {
   all[dateKey] = result;
   writeJSON('daily', all);
 }
+
+/** Todas las fechas con caso del día resuelto, para la racha diaria (§16.3). */
+export function getDailyResultDates(): string[] {
+  return Object.keys(readJSON<DailyResultsByDate>('daily', {}));
+}

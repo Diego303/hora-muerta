@@ -4,17 +4,20 @@
 import { VICTIMS } from '../engine/content/cast';
 import { MAPS } from '../engine/content/maps';
 import { buildTextContext } from '../engine/generate';
-import { hintPush, stepExplanation, stepFocus, timeLabel } from '../engine/text';
+import { buildGraph } from '../engine/graph';
+import { formatElapsed, hintPush, stepExplanation, stepFocus, timeLabel } from '../engine/text';
 import type { CaseDef, MapDef, Room } from '../engine/types';
 import { markPlayed } from '../game/bank';
 import { completeNight, loadSeriesProgress, registerSeriesError } from '../game/expediente';
 import { nextHint } from '../game/hints';
 import { recordDailyResult, todayKey } from '../game/modes';
+import { ARCHETYPE_LABELS, recordClosure } from '../game/progression';
 import type { AccusationOutcome } from '../game/scoring';
 import { computeStars } from '../game/scoring';
 import { clearSavedGame, loadSavedGame, saveGame } from '../game/session';
 import type { ChalkColor, MarkValue } from '../game/store';
 import { createGameStore, markKey } from '../game/store';
+import { effectiveMoveHelp, getProfile, getSettings, saveProfile } from '../game/storage';
 import { openAccuseSheet } from './accuse';
 import { setupChalk } from './chalk';
 import { renderCaseTab } from './casetab';
@@ -54,6 +57,7 @@ const CHALK_SWATCHES: { color: ChalkColor; label: string }[] = [
 
 export function renderBoard(root: HTMLElement, caseData: CaseDef, options: BoardOptions): () => void {
   const map = findMap(caseData.map);
+  const graph = buildGraph(map);
   const textCtx = buildTextContext(map, caseData.cast, caseData.objects);
   const suspects: SuspectView[] = textCtx.suspects.map((s) => ({ name: s.name, init: s.name[0], color: s.color }));
   // Un expediente comparte el presupuesto de errores entre sus 3 noches
@@ -74,6 +78,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
       <div class="gbar">
         <button class="icon-btn" id="exit" aria-label="Volver a la portada">←</button>
         <div class="ttl"><b>${map.name}</b></div>
+        <span class="timer" id="timerDisplay" aria-label="Tiempo" hidden></span>
         <div class="stars" id="starsDisplay">★★★</div>
       </div>
       <div class="game-main">
@@ -117,6 +122,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
 
   const gameRoot = requireEl<HTMLDivElement>(root, '#gameRoot');
   const starsDisplay = requireEl<HTMLDivElement>(root, '#starsDisplay');
+  const timerDisplay = requireEl<HTMLSpanElement>(root, '#timerDisplay');
   const briefEl = requireEl<HTMLButtonElement>(root, '#brief');
   const mapSvg = requireEl<SVGSVGElement>(root, '#mapSvg');
   const chalkCanvas = requireEl<HTMLCanvasElement>(root, '#chalkCanvas');
@@ -320,6 +326,36 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     }
   }
 
+  /** Ayuda de movimiento (§17.4, §11, opcional según Ajustes/nivel): con un
+   * sospechoso seleccionado en Marcar que tenga ✓ en la hora anterior o
+   * siguiente, las salas a las que no pudo llegar en un paso del grafo se
+   * devuelven para rayarlas. Solo usa las marcas de la persona, nunca la
+   * verdad del caso. */
+  function moveHelpHatch(state: ReturnType<typeof store.getState>): Room[] {
+    if (state.mode !== 'mark' || state.selectedSuspect === null) return [];
+    if (!effectiveMoveHelp(getSettings(), caseData.diff)) return [];
+    const suspect = state.selectedSuspect;
+    const prevHour = state.hour > 0 ? state.hour - 1 : null;
+    const nextHour = state.hour < caseData.T - 1 ? state.hour + 1 : null;
+    const reachableFrom = (hour: number | null): Set<number> | null => {
+      if (hour === null) return null;
+      for (let r = 0; r < map.rooms.length; r++) {
+        if (state.marks.get(markKey(hour, r, suspect)) === 1) return new Set([r, ...graph.adj[r]]);
+      }
+      return null;
+    };
+    const fromPrev = reachableFrom(prevHour);
+    const fromNext = reachableFrom(nextHour);
+    if (!fromPrev && !fromNext) return [];
+    const hatch: Room[] = [];
+    for (let r = 0; r < map.rooms.length; r++) {
+      const okPrev = !fromPrev || fromPrev.has(r);
+      const okNext = !fromNext || fromNext.has(r);
+      if (!okPrev || !okNext) hatch.push(r);
+    }
+    return hatch;
+  }
+
   function draw(): void {
     const state = store.getState();
     plan.setCrime(state.hour === caseData.td);
@@ -339,14 +375,17 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     else if (state.hint?.kind === 'markError' && state.hint.room !== null) highlightRooms.push(state.hint.room);
     plan.highlight(highlightRooms);
 
+    // Estela (§17.4): se puede desactivar en Ajustes.
+    const trailOn = getSettings().trail;
     const prevHour = state.hour > 0 ? state.hour - 1 : null;
     const nextHour = state.hour < caseData.T - 1 ? state.hour + 1 : null;
     plan.trail(
-      prevHour === null ? null : (room, suspect) => (state.marks.get(markKey(prevHour, room, suspect)) ?? 0) as MarkValue,
-      nextHour === null ? null : (room, suspect) => (state.marks.get(markKey(nextHour, room, suspect)) ?? 0) as MarkValue,
+      !trailOn || prevHour === null ? null : (room, suspect) => (state.marks.get(markKey(prevHour, room, suspect)) ?? 0) as MarkValue,
+      !trailOn || nextHour === null ? null : (room, suspect) => (state.marks.get(markKey(nextHour, room, suspect)) ?? 0) as MarkValue,
       suspects,
     );
 
+    plan.hatchRooms(moveHelpHatch(state));
     chalk.redraw();
   }
 
@@ -358,6 +397,8 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     gameRoot.setAttribute('data-sheet', state.sheetState);
     const stars = computeStars(state.errors, state.hintsUsed);
     starsDisplay.textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+    timerDisplay.hidden = !getSettings().showTimer;
+    if (!timerDisplay.hidden) timerDisplay.textContent = formatElapsed(state.elapsed);
     renderSubtools();
     renderSheet();
     renderHint();
@@ -485,6 +526,24 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     cleanup();
     clearSavedGame();
     if (options.bankVersion) markPlayed(options.bankVersion, caseData.id);
+    // Progresión (§16): cada caso RESUELTO (no un archivado sin resolver)
+    // cuenta para el rango, los recuentos por nivel y el archivo de
+    // arquetipos, sea cual sea el modo (suelto, diario o una noche de
+    // expediente).
+    if (finalState.result === 'solved') {
+      const { profile, newArchetypes } = recordClosure(getProfile(), {
+        caseData,
+        stars: computeStars(finalState.errors, finalState.hintsUsed),
+        errors: finalState.errors,
+        elapsed: finalState.elapsed,
+      });
+      saveProfile(profile);
+      if (newArchetypes.length > 0) {
+        const labels = newArchetypes.map((a) => ARCHETYPE_LABELS[a]);
+        const joined = labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(', ')} y ${labels[labels.length - 1]}`;
+        toast(`Nuevo en tu archivo: ${joined}.`);
+      }
+    }
     if (caseData.mode === 'diario') {
       recordDailyResult(todayKey(), {
         stars: computeStars(finalState.errors, finalState.hintsUsed),

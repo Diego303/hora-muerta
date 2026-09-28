@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getOrderSeed, getPlayed, markPlayed, nextUnplayed, resetPlayed } from '../../src/game/bank';
-import type { BankFile, CaseDef } from '../../src/engine/types';
+import type { BankFile, CaseDef, MapId } from '../../src/engine/types';
+
+const ALL_MAPS = new Set<MapId>(['mansion', 'tren', 'museo', 'hotel', 'barco', 'teatro']);
 
 class MemoryStorage {
   private store = new Map<string, string>();
@@ -70,36 +72,52 @@ describe('game/bank', () => {
     storage1.setItem('hm2:order', JSON.stringify({ seed: 'fixed-seed' }));
     // @ts-expect-error se sustituye por una implementación en memoria solo para la prueba
     globalThis.localStorage = storage1;
-    const firstSession = nextUnplayed(BANK, null);
+    const firstSession = nextUnplayed(BANK, null, ALL_MAPS);
 
     const storage2 = new MemoryStorage();
     storage2.setItem('hm2:order', JSON.stringify({ seed: 'fixed-seed' }));
     // @ts-expect-error se sustituye por una implementación en memoria solo para la prueba
     globalThis.localStorage = storage2;
-    const secondSession = nextUnplayed(BANK, null);
+    const secondSession = nextUnplayed(BANK, null, ALL_MAPS);
 
     expect(firstSession).not.toBeNull();
     expect(secondSession?.id).toBe(firstSession?.id);
   });
 
   it('nextUnplayed no repite un caso ya jugado', () => {
-    const first = nextUnplayed(BANK, null);
+    const first = nextUnplayed(BANK, null, ALL_MAPS);
     expect(first).not.toBeNull();
     if (!first) return;
     markPlayed(BANK.version, first.id);
-    const second = nextUnplayed(BANK, null);
+    const second = nextUnplayed(BANK, null, ALL_MAPS);
     expect(second).not.toBeNull();
     expect(second?.id).not.toBe(first.id);
   });
 
   it('nextUnplayed respeta el filtro de mapa', () => {
-    const next = nextUnplayed(BANK, 'tren');
+    const next = nextUnplayed(BANK, 'tren', ALL_MAPS);
     expect(next?.map).toBe('tren');
+  });
+
+  it('nextUnplayed nunca sirve un caso de un escenario bloqueado (§16.1)', () => {
+    const onlyMansion = new Set<CaseDef['map']>(['mansion']);
+    const mansionCount = BANK.cases.filter((c) => c.map === 'mansion').length;
+    for (let i = 0; i < mansionCount; i++) {
+      const next = nextUnplayed(BANK, null, onlyMansion);
+      expect(next?.map).toBe('mansion');
+      if (next) markPlayed(BANK.version, next.id);
+    }
+    expect(nextUnplayed(BANK, null, onlyMansion)).toBeNull();
+  });
+
+  it('el filtro de escenario desbloqueado y el de mapa elegido se combinan', () => {
+    const onlyMansion = new Set<CaseDef['map']>(['mansion']);
+    expect(nextUnplayed(BANK, 'tren', onlyMansion)).toBeNull();
   });
 
   it('nextUnplayed devuelve null cuando se han jugado todos los del filtro (agotamiento)', () => {
     for (const c of BANK.cases) markPlayed(BANK.version, c.id);
-    expect(nextUnplayed(BANK, null)).toBeNull();
+    expect(nextUnplayed(BANK, null, ALL_MAPS)).toBeNull();
   });
 
   it('resetPlayed olvida solo los ids del grupo indicado, no los de otros modos', () => {
@@ -117,7 +135,7 @@ describe('game/bank', () => {
   it('sin localStorage (modo privado), sigue funcionando con valores por defecto', () => {
     // @ts-expect-error localStorage no existe en el entorno de pruebas por defecto (Node)
     delete globalThis.localStorage;
-    expect(() => nextUnplayed(BANK, null)).not.toThrow();
+    expect(() => nextUnplayed(BANK, null, ALL_MAPS)).not.toThrow();
     expect(getPlayed(BANK.version).size).toBe(0);
   });
 });
