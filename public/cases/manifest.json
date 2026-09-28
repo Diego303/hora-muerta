@@ -1,0 +1,32 @@
+{
+  "version": "2026.09-a",
+  "counts": {
+    "novato": 170,
+    "inspector": 160,
+    "comisario": 0,
+    "diario": 55,
+    "expediente": 0
+  },
+  "files": {
+    "novato.json": {
+      "count": 170,
+      "hash": "1ecilp6"
+    },
+    "inspector.json": {
+      "count": 160,
+      "hash": "tgsj2h"
+    },
+    "comisario.json": {
+      "count": 0,
+      "hash": "17eznqy"
+    },
+    "diario.json": {
+      "count": 55,
+      "hash": "1o9f513"
+    },
+    "expedientes.json": {
+      "count": 0,
+      "hash": "183pn0b"
+    }
+  }
+}
