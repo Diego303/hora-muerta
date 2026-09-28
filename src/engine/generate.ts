@@ -202,7 +202,11 @@ export function buildTextContext(map: MapDef, castIndices: number[], objectIndic
  * encontrar su nueva posición; si no la encuentra es un fallo real del solver,
  * no un caso a tolerar en silencio.
  */
-function reindexCriticalSteps(steps: Step[]): Step[] {
+/** Filtra a los pasos críticos y renumera `Step.prem` a posiciones dentro de
+ * esa lista filtrada (antes apuntaban a la lista completa sin filtrar). Se
+ * exporta para que `game/tutorial.ts` pueda construir un CaseDef a partir de
+ * un HumanSolution sin duplicar esta lógica. */
+export function reindexCriticalSteps(steps: Step[]): Step[] {
   const indexMap = new Map<number, number>();
   steps.forEach((s, i) => {
     if (s.crit) indexMap.set(i, indexMap.size);

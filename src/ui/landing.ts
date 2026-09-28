@@ -4,11 +4,12 @@
 // detectar el agotamiento del grupo) es cosa de quien llama, no de esta pantalla.
 import { CHIP_COLORS } from '../engine/content/cast';
 import { MAPS } from '../engine/content/maps';
-import type { CaseMode, MapId } from '../engine/types';
+import type { CaseDef, CaseMode, MapId } from '../engine/types';
 import { getDailyResultDates, todayKey } from '../game/modes';
 import { RANKS, computeDailyStreak, isMapUnlocked, rankProgress } from '../game/progression';
 import { loadSavedGame } from '../game/session';
-import { getProfile } from '../game/storage';
+import { getProfile, hasTutorialDone } from '../game/storage';
+import { renderCaseMap } from './casemap';
 import { startDemo } from './demo';
 
 const MODE_LABEL: Record<CaseMode, string> = {
@@ -27,6 +28,9 @@ export interface LandingOptions {
   onSettings: () => void;
   onProfile: () => void;
   onHelp: () => void;
+  onTutorial: () => void;
+  onPlayCase: (caseData: CaseDef, bankVersion: string | null) => void;
+  onShowCaseList: () => void;
 }
 
 export function renderLanding(root: HTMLElement, options: LandingOptions): () => void {
@@ -46,12 +50,19 @@ export function renderLanding(root: HTMLElement, options: LandingOptions): () =>
           Hora Muerta
         </div>
         <nav>
+          <button class="icon-btn" id="goTutorial">Tutorial</button>
           <button class="icon-btn" id="goHelp">Cómo se juega</button>
           <button class="icon-btn" id="goProfile" aria-label="Perfil">☰</button>
           <button class="icon-btn" id="goSettings" aria-label="Ajustes">⚙</button>
           <button class="icon-btn themeT" aria-label="Cambiar tema claro u oscuro">◐</button>
         </nav>
       </header>
+
+      <aside class="tutband" id="tutBand" aria-labelledby="tbT">
+        <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="3" y="3" width="42" height="42" style="fill:var(--room);stroke:var(--wall)" stroke-width="2.5"/><path d="M24 3v15M3 26h13M32 26h13" style="stroke:var(--wall)" stroke-width="2.5"/><path d="M11 38C17 31 24 34 25 24S33 13 37 11" fill="none" style="stroke:var(--amber)" stroke-width="2.8" stroke-dasharray="4 3.5" stroke-linecap="round"/><circle cx="37" cy="11" r="3.8" style="fill:var(--pencil)"/></svg>
+        <div><b id="tbT">${hasTutorialDone() ? 'Tutorial completado' : 'Primera vez: resuelve un caso guiado'}</b><span id="tbS">${hasTutorialDone() ? 'Repasa cuando quieras cómo leer el plano, anotar, dibujar y razonar hasta acusar.' : 'Un caso pequeño pero completo. Aprenderás a leer el plano, anotar y dibujar en la pizarra, y razonar paso a paso hasta acusar. Unos 7 minutos.'}</span></div>
+        <button class="btn${hasTutorialDone() ? ' ghost' : ''}" id="tutGo">${hasTutorialDone() ? 'Repetir el tutorial' : 'Empezar el tutorial'}</button>
+      </aside>
 
       <section class="hero">
         <div>
@@ -96,6 +107,12 @@ export function renderLanding(root: HTMLElement, options: LandingOptions): () =>
           </div>
         </div>
         <p class="answer"><b>Tu respuesta:</b> quién lo hizo y con qué. Para llegar ahí tienes el plano con sus puertas, una pestaña por hora, marcas por sala, una tabla de objetos y tiza para dibujar encima.</p>
+      </section>
+
+      <section class="sec" id="plano-casos">
+        <h2>Elige un caso</h2>
+        <p class="intro">Cada pin del plano de Valdeniebla es un caso real, listo para jugarse. Van cambiando: si no ves uno que te guste, espera un momento o mira la lista completa.</p>
+        <div id="caseMapHost"></div>
       </section>
 
       <section class="sec" id="niveles">
@@ -164,6 +181,8 @@ export function renderLanding(root: HTMLElement, options: LandingOptions): () =>
   root.querySelector('#goHelp')?.addEventListener('click', () => options.onHelp());
   root.querySelector('#goProfile')?.addEventListener('click', () => options.onProfile());
   root.querySelector('#goProfile2')?.addEventListener('click', () => options.onProfile());
+  root.querySelector('#goTutorial')?.addEventListener('click', () => options.onTutorial());
+  root.querySelector('#tutGo')?.addEventListener('click', () => options.onTutorial());
 
   const statsEl = root.querySelector<HTMLParagraphElement>('#stats');
   if (statsEl) {
@@ -190,6 +209,15 @@ export function renderLanding(root: HTMLElement, options: LandingOptions): () =>
   const demoClock = root.querySelector<HTMLElement>('#demoClock');
   const demoMark = root.querySelector<HTMLElement>('#demoMark');
   if (!demoMap || !demoClock || !demoMark) throw new Error('Falta el marcado de la animación de portada.');
+  const stopDemo = startDemo(demoMap, demoClock, demoMark);
 
-  return startDemo(demoMap, demoClock, demoMark);
+  const caseMapHost = root.querySelector<HTMLDivElement>('#caseMapHost');
+  const stopCaseMap = caseMapHost
+    ? renderCaseMap(caseMapHost, { onPlay: options.onPlayCase, onShowFullList: options.onShowCaseList })
+    : () => undefined;
+
+  return () => {
+    stopDemo();
+    stopCaseMap();
+  };
 }

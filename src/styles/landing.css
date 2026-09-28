@@ -412,3 +412,628 @@ footer {
   margin: 0.2em 0 0;
   color: var(--ink-2);
 }
+
+/* =====================================================================
+   Aviso del tutorial en la portada (game/tutorial.ts, ui/tutorial.ts).
+   ===================================================================== */
+.tutband {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px 16px;
+  align-items: center;
+  border: 2px solid var(--ink);
+  background: var(--panel);
+  padding: 12px 16px;
+  margin: 4px 0 6px;
+}
+.tutband svg {
+  width: 46px;
+  height: 46px;
+}
+.tutband b {
+  display: block;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.35rem;
+  line-height: 1.05;
+}
+.tutband span {
+  display: block;
+  color: var(--ink-2);
+  font-size: 0.95rem;
+  margin-top: 3px;
+  max-width: 52em;
+}
+@media (max-width: 640px) {
+  .tutband {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .tutband .btn {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+  .tutband svg {
+    width: 38px;
+    height: 38px;
+  }
+}
+
+/* =====================================================================
+   Plano de casos plegable (ui/casemap.ts): panfleto de 3 hojas con bisagra
+   en 3D, réplica fiel del prototipo de referencia, con el plano ilustrado de
+   Valdeniebla (game/citymap.ts, portado tal cual de la referencia) y pines
+   que van y vienen solos (game/casepins.ts). Sin lista de "casos abiertos
+   ahora" aparte: la gracia del plano es elegir tocando un pin; quien quiera
+   elegir sin prisa tiene el botón "Ver todos los casos" (ui/caselist.ts).
+   ===================================================================== */
+.city {
+  display: grid;
+  gap: 22px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'level' 'stage' 'card';
+}
+.c-level {
+  grid-area: level;
+}
+.c-stagewrap {
+  grid-area: stage;
+  min-width: 0;
+}
+.c-side {
+  grid-area: card;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.c-level h3 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.35rem;
+  margin: 0 0 10px;
+  line-height: 1;
+}
+@media (min-width: 980px) {
+  .city {
+    grid-template-columns: 290px minmax(0, 1fr);
+    grid-template-areas: 'level stage' 'card stage';
+    align-items: start;
+    column-gap: 36px;
+  }
+  .lvopts {
+    flex-direction: column;
+    overflow: visible;
+  }
+}
+@media (max-width: 979px) {
+  .lvopt small {
+    display: none;
+  }
+  .lvopt svg {
+    grid-row: auto;
+  }
+}
+
+.lvopts {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+.lvopts::-webkit-scrollbar {
+  display: none;
+}
+.lvopt {
+  display: grid;
+  grid-template-columns: 22px auto;
+  column-gap: 10px;
+  align-items: center;
+  text-align: left;
+  border: 2px solid var(--grid);
+  background: transparent;
+  border-radius: 4px;
+  padding: 9px 12px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  min-height: 44px;
+}
+.lvopt svg {
+  width: 20px;
+  height: 20px;
+  grid-row: span 2;
+}
+.lvopt b {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+.lvopt small {
+  color: var(--ink-2);
+  font-size: 0.82rem;
+  line-height: 1.3;
+}
+.lvopt[aria-checked='true'] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+.lvopt[aria-checked='true'] small {
+  color: color-mix(in srgb, var(--paper) 75%, transparent);
+}
+
+.pf-stage {
+  position: relative;
+  perspective: 2600px;
+  perspective-origin: 50% 40%;
+  overflow: hidden;
+  padding: 14px 0 26px;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+.pf-stage.scroll {
+  overflow-x: auto;
+}
+.pf-sheet {
+  position: relative;
+  margin: 0 auto;
+  width: var(--W);
+  height: var(--H);
+  transform-style: preserve-3d;
+}
+.pf-panel {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: var(--P);
+  transform-style: preserve-3d;
+}
+.pf-a {
+  left: 0;
+  transform-origin: 100% 50%;
+}
+.pf-b {
+  left: var(--P);
+}
+.pf-c {
+  left: calc(var(--P) * 2);
+  transform-origin: 0 50%;
+}
+.pf-face {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--room);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.08),
+    0 14px 30px -12px rgba(13, 30, 48, 0.45);
+}
+.pf-face.back {
+  transform: rotateY(180deg);
+}
+.pf-face::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+}
+.pf-a .pf-face::after {
+  background: linear-gradient(270deg, rgba(15, 28, 40, 0.55), rgba(15, 28, 40, 0.12));
+}
+.pf-c .pf-face::after {
+  background: linear-gradient(90deg, rgba(15, 28, 40, 0.55), rgba(15, 28, 40, 0.12));
+}
+.pf-slice {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.pf-sheet.closed .pf-a {
+  transform: rotateY(180deg) translateZ(-2px);
+}
+.pf-sheet.closed .pf-c {
+  transform: rotateY(-180deg) translateZ(-1px);
+}
+@keyframes pfA {
+  from {
+    transform: rotateY(180deg) translateZ(-2px);
+  }
+  to {
+    transform: rotateY(0deg) translateZ(0);
+  }
+}
+@keyframes pfC {
+  from {
+    transform: rotateY(-180deg) translateZ(-1px);
+  }
+  to {
+    transform: rotateY(0deg) translateZ(0);
+  }
+}
+@keyframes pfShade {
+  0% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes pfLift {
+  0%,
+  100% {
+    transform: translateZ(0);
+  }
+  45% {
+    transform: translateZ(26px);
+  }
+}
+.pf-sheet.opening {
+  animation: pfLift 1.7s ease-in-out both;
+}
+.pf-sheet.opening .pf-a {
+  animation: pfA 0.85s cubic-bezier(0.55, 0.08, 0.3, 1) both;
+}
+.pf-sheet.opening .pf-a .pf-face::after {
+  animation: pfShade 0.85s ease-in-out both;
+}
+.pf-sheet.opening .pf-c {
+  animation: pfC 0.85s cubic-bezier(0.55, 0.08, 0.3, 1) 0.78s both;
+}
+.pf-sheet.opening .pf-c .pf-face::after {
+  animation: pfShade 0.85s ease-in-out 0.78s both;
+}
+.pf-sheet.closing .pf-c {
+  animation: pfC 0.7s cubic-bezier(0.55, 0.08, 0.3, 1) reverse both;
+}
+.pf-sheet.closing .pf-c .pf-face::after {
+  animation: pfShade 0.7s ease-in-out reverse both;
+}
+.pf-sheet.closing .pf-a {
+  animation: pfA 0.7s cubic-bezier(0.55, 0.08, 0.3, 1) 0.62s reverse both;
+}
+.pf-sheet.closing .pf-a .pf-face::after {
+  animation: pfShade 0.7s ease-in-out 0.62s reverse both;
+}
+.pf-pins {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: translateZ(3px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s;
+}
+.pf-sheet.open .pf-pins {
+  opacity: 1;
+  pointer-events: auto;
+}
+.pf-creases {
+  position: absolute;
+  inset: 0;
+  transform: translateZ(2px);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s;
+  background:
+    linear-gradient(90deg, transparent calc(33.333% - 1px), rgba(0, 0, 0, 0.18) calc(33.333% - 1px), rgba(0, 0, 0, 0.18) calc(33.333% + 1px), transparent calc(33.333% + 1px)),
+    linear-gradient(90deg, transparent calc(66.666% - 1px), rgba(0, 0, 0, 0.18) calc(66.666% - 1px), rgba(0, 0, 0, 0.18) calc(66.666% + 1px), transparent calc(66.666% + 1px));
+}
+.pf-sheet.open .pf-creases {
+  opacity: 1;
+}
+
+.pin {
+  cursor: pointer;
+  outline: none;
+}
+.pin .pin-in {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+.pf-sheet.open .pin .pin-in {
+  animation: pinDrop 0.42s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+  animation-delay: calc(var(--i) * 40ms + 60ms);
+}
+@keyframes pinDrop {
+  from {
+    transform: translateY(-22px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.pin-bar-track {
+  fill: color-mix(in srgb, #15222c 18%, transparent);
+}
+.pin-bar {
+  fill: #15222c;
+  transform-box: fill-box;
+  transform-origin: 0% 50%;
+  animation: pinBar linear forwards;
+}
+@keyframes pinBar {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+.pin-ring {
+  fill: none;
+  stroke: var(--amber);
+  stroke-width: 2.4;
+  opacity: 0;
+}
+.pin:focus-visible .pin-ring {
+  stroke: var(--focus);
+  stroke-width: 4;
+  opacity: 1;
+}
+.pin.sel .pin-ring {
+  opacity: 1;
+  animation: ring 1.6s ease-out infinite;
+}
+@keyframes ring {
+  0% {
+    stroke-opacity: 1;
+  }
+  100% {
+    stroke-opacity: 0.25;
+  }
+}
+.pf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+}
+.pf-actions .note {
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+
+.cover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  color: var(--ink);
+  background: var(--room);
+}
+.cover:focus-visible {
+  outline: 4px solid var(--focus);
+  outline-offset: -4px;
+}
+.cv-top {
+  background: var(--wall);
+  color: var(--paper);
+  padding: calc(var(--P) * 0.075) calc(var(--P) * 0.08) calc(var(--P) * 0.06);
+  position: relative;
+}
+.cv-pub {
+  display: block;
+  font-size: calc(var(--P) * 0.042);
+  opacity: 0.78;
+  letter-spacing: 0.02em;
+}
+.cv-title {
+  display: block;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: calc(var(--P) * 0.2);
+  line-height: 0.9;
+  margin: 0.18em 0 0.12em;
+  letter-spacing: 0.005em;
+}
+.cv-sub {
+  display: block;
+  font-size: calc(var(--P) * 0.055);
+  line-height: 1.25;
+}
+.cv-top::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -7px;
+  height: 7px;
+  background: repeating-linear-gradient(90deg, var(--pencil) 0 18px, var(--wall) 18px 36px);
+}
+.cv-bottom {
+  padding: 0 calc(var(--P) * 0.08) calc(var(--P) * 0.07);
+}
+.cv-bottom p {
+  margin: 0;
+  font-size: calc(var(--P) * 0.052);
+  line-height: 1.35;
+}
+.cv-bottom .cv-cta {
+  font-weight: 700;
+  margin-top: 0.35em;
+}
+.cv-legend {
+  display: flex;
+  gap: calc(var(--P) * 0.04);
+  margin-top: calc(var(--P) * 0.04);
+  align-items: center;
+  font-size: calc(var(--P) * 0.04);
+  color: var(--ink-2);
+  flex-wrap: wrap;
+}
+.cv-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+}
+.cv-legend svg {
+  width: 1.3em;
+  height: 1.3em;
+}
+
+.flap {
+  position: absolute;
+  inset: 0;
+  background: var(--room);
+  color: var(--ink);
+  padding: calc(var(--P) * 0.1) calc(var(--P) * 0.09);
+  overflow-y: auto;
+}
+.flap h4 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: calc(var(--P) * 0.1);
+  line-height: 1;
+  margin: 0 0 0.5em;
+}
+.flap p {
+  font-size: calc(var(--P) * 0.048);
+  line-height: 1.4;
+  margin: 0 0 0.8em;
+  color: var(--ink-2);
+}
+.flap ul {
+  list-style: none;
+  margin: 0 0 1em;
+  padding: 0;
+}
+.flap li {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  font-size: calc(var(--P) * 0.052);
+  margin-bottom: 0.55em;
+}
+.flap li svg {
+  width: 1.4em;
+  height: 1.4em;
+  flex: 0 0 auto;
+}
+
+.c-card {
+  border: 2px solid var(--ink);
+  background: var(--panel);
+  padding: 16px 18px;
+  min-height: 120px;
+}
+.c-card .cc-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-2);
+  font-size: 0.92rem;
+}
+.c-card .cc-head svg {
+  width: 20px;
+  height: 20px;
+}
+.c-card h3 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.9rem;
+  line-height: 0.95;
+  margin: 0.25em 0 0.15em;
+}
+.c-card .cc-where {
+  color: var(--ink-2);
+  margin: 0 0 0.6em;
+  font-size: 0.95rem;
+}
+.c-card .cc-teaser {
+  margin: 0 0 0.7em;
+}
+.c-card .cc-spec {
+  margin: 0 0 1em;
+  font-size: 0.95rem;
+  color: var(--ink-2);
+}
+.c-card .cc-spec b {
+  color: var(--ink);
+}
+.c-card .cc-empty {
+  margin: 0;
+  color: var(--ink-2);
+}
+.c-card .btn {
+  width: 100%;
+  justify-content: center;
+  min-height: 44px;
+}
+.c-side > .btn {
+  min-height: 44px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-sheet.open .pin .pin-in,
+  .pin.sel .pin-ring {
+    animation: none;
+  }
+}
+
+/* =====================================================================
+   Lista completa de casos (ui/caselist.ts): filtros por nivel/escenario y
+   filas paginadas, reutilizando .gbar/.sec/.chip/.pick de las demás
+   pantallas de tablero/portada.
+   ===================================================================== */
+.caselist-view {
+  padding-top: 18px;
+  padding-bottom: 32px;
+}
+.case-rows {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--grid);
+}
+.case-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--grid);
+}
+.case-row-lv {
+  flex: 0 0 auto;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: var(--ink-2);
+  border: 1.5px solid var(--grid);
+  border-radius: 3px;
+  padding: 3px 7px;
+}
+.case-row-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.case-row-info b {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+.case-row-info span {
+  color: var(--ink-2);
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.case-row .btn {
+  flex: 0 0 auto;
+  min-height: 44px;
+}

@@ -12,10 +12,11 @@ import { completeNight, loadSeriesProgress, registerSeriesError } from '../game/
 import { nextHint } from '../game/hints';
 import { recordDailyResult, todayKey } from '../game/modes';
 import { ARCHETYPE_LABELS, recordClosure } from '../game/progression';
+import { TUTORIAL_CASE_ID } from '../game/tutorial';
 import type { AccusationOutcome } from '../game/scoring';
 import { computeStars } from '../game/scoring';
 import { clearSavedGame, loadSavedGame, saveGame } from '../game/session';
-import type { ChalkColor, MarkValue } from '../game/store';
+import type { ChalkColor, GameStore, MarkValue } from '../game/store';
 import { createGameStore, markKey } from '../game/store';
 import { effectiveMoveHelp, getProfile, getSettings, saveProfile } from '../game/storage';
 import { openAccuseSheet } from './accuse';
@@ -35,6 +36,10 @@ export interface BoardOptions {
    * como jugado al cerrar el caso; `null` si no viene de un banco versionado
    * (p. ej. modo infinito). */
   bankVersion: string | null;
+  /** Se llama una vez, justo después de montar el tablero, con el store y el
+   * plano ya construidos (ui/tutorial.ts lo usa para enganchar el "coach" sin
+   * que board.ts sepa nada del tutorial). */
+  onReady?: (store: GameStore, plan: PlanHandle) => void;
 }
 
 function findMap(mapId: CaseDef['map']): MapDef {
@@ -90,8 +95,9 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   const suspects: SuspectView[] = textCtx.suspects.map((s) => ({ name: s.name, init: s.name[0], color: s.color }));
   // Un expediente comparte el presupuesto de errores entre sus 3 noches
   // (§13): esta noche por sí sola nunca se archiva; el handler de la
-  // acusación (más abajo) lleva la cuenta compartida aparte.
-  const maxErrors = caseData.mode === 'expediente' ? Number.POSITIVE_INFINITY : 2;
+  // acusación (más abajo) lleva la cuenta compartida aparte. El tutorial
+  // tampoco tiene presupuesto de errores: "equivócate sin miedo".
+  const maxErrors = caseData.mode === 'expediente' || caseData.id === TUTORIAL_CASE_ID ? Number.POSITIVE_INFINITY : 2;
   const store = createGameStore(caseData, map.rooms.length, nextHint, maxErrors);
 
   // Caso en curso (§18, hm2:game): retoma el progreso guardado si es el mismo
@@ -462,6 +468,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   const unsubscribe = store.subscribe(renderAll);
   renderLegend();
   renderAll();
+  options.onReady?.(store, plan);
 
   // Guardado automático con 300 ms de retardo tras cada acción, y al momento
   // si se oculta la pestaña (§18), para no perder el progreso al recargar.
@@ -471,6 +478,9 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
       clearTimeout(saveTimer);
       saveTimer = null;
     }
+    // El tutorial no se guarda como "caso en curso": no está en ningún banco,
+    // así que "Seguir el caso" no podría volver a abrirlo (§18).
+    if (caseData.id === TUTORIAL_CASE_ID) return;
     saveGame(caseData.id, caseData.mode, store.getState(), startedAt);
   }
   const unsaveSubscribe = store.subscribe(() => {
@@ -613,8 +623,9 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     // Progresión (§16): cada caso RESUELTO (no un archivado sin resolver)
     // cuenta para el rango, los recuentos por nivel y el archivo de
     // arquetipos, sea cual sea el modo (suelto, diario o una noche de
-    // expediente).
-    if (finalState.result === 'solved') {
+    // expediente). El tutorial es la única excepción: no cuenta en las
+    // estadísticas (game/tutorial.ts).
+    if (finalState.result === 'solved' && caseData.id !== TUTORIAL_CASE_ID) {
       const { profile, newArchetypes } = recordClosure(getProfile(), {
         caseData,
         stars: computeStars(finalState.errors, finalState.hintsUsed),

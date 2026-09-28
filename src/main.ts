@@ -12,8 +12,10 @@ import { hasReachedRank, isMapUnlocked, recordSeriesCompletion } from './game/pr
 import { computeStars } from './game/scoring';
 import { clearSavedGame, loadSavedGame } from './game/session';
 import { getProfile, migrateFromV1, saveProfile } from './game/storage';
+import { TUTORIAL_CASE } from './game/tutorial';
 import { initTheme, wireThemeToggles } from './ui/a11y';
 import { renderBoard } from './ui/board';
+import { renderCaseList } from './ui/caselist';
 import { renderExhausted } from './ui/exhausted';
 import { renderHelp } from './ui/help';
 import { renderLanding } from './ui/landing';
@@ -22,6 +24,7 @@ import { renderLoading } from './ui/loading';
 import { renderProfile } from './ui/profile';
 import { renderSettings } from './ui/settings';
 import { toast } from './ui/toast';
+import { startTutorialCoach } from './ui/tutorial';
 
 const appEl = document.getElementById('app');
 if (!appEl) throw new Error('Falta el contenedor #app en index.astro.');
@@ -54,6 +57,9 @@ function showLanding(): void {
     onSettings: showSettings,
     onProfile: showProfile,
     onHelp: showHelp,
+    onTutorial: showTutorial,
+    onPlayCase: (caseData, bankVersion) => showBoard(caseData, bankVersion, null),
+    onShowCaseList: showCaseList,
   });
   wireThemeToggles();
 }
@@ -61,6 +67,38 @@ function showLanding(): void {
 function showHelp(): void {
   cleanup?.();
   cleanup = renderHelp(app, { onBack: showLanding });
+}
+
+/** Tutorial guiado: un caso de prácticas fijo (game/tutorial.ts) con un
+ * "coach" flotante encima del tablero real (ui/tutorial.ts). No cuenta para
+ * las estadísticas ni se guarda como caso en curso (board.ts ya lo trata
+ * aparte por el id TUT-01). */
+function showTutorial(): void {
+  cleanup?.();
+  let stopCoach: (() => void) | null = null;
+  const exitTutorial = (): void => {
+    stopCoach?.();
+    stopCoach = null;
+    showLanding();
+  };
+  cleanup = renderBoard(app, TUTORIAL_CASE, {
+    onExit: exitTutorial,
+    onNextCase: () => exitTutorial(),
+    bankVersion: null,
+    onReady: (store, plan) => {
+      stopCoach = startTutorialCoach(app, store, plan, { onExit: exitTutorial });
+    },
+  });
+}
+
+/** Lista completa de casos, filtrable (§ nueva mejora): la alternativa de
+ * "elegir con calma" al plano plegable, que solo enseña unos pocos a la vez. */
+function showCaseList(): void {
+  cleanup?.();
+  cleanup = renderCaseList(app, {
+    onBack: showLanding,
+    onPlay: (caseData, bankVersion) => showBoard(caseData, bankVersion, null),
+  });
 }
 
 function showSettings(): void {
