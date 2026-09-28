@@ -1,6 +1,17 @@
 /* Render del plano (SVG). Se amplía en el hito M4 con la mesa de trabajo completa. */
+/* Los 6 mapas miden 12×9 (Apéndice A, MapDef.w/h): `aspect-ratio` fija esa
+ * proporción en el propio contenedor, así que el SVG y el <canvas> de la
+ * tiza (los dos al 100%/100% de .plan, ver más abajo) SIEMPRE miden y
+ * coinciden exactamente, se restrinja .plan por ancho o por alto (media
+ * queries más abajo). Antes .plan y el SVG se dimensionaban cada uno por su
+ * cuenta (el SVG con su proporción real, .plan con una altura fija aparte);
+ * cuando no coincidían, el SVG quedaba más pequeño que .plan y centrado con
+ * margin:auto, pero el <canvas> seguía llenando la caja de .plan entera —
+ * de ahí que la tiza se dibujara desplazada del plano real, sobre todo en
+ * escritorio, donde .plan es mucho más ancho que alto. */
 .plan {
   position: relative;
+  aspect-ratio: 12 / 9;
   background-color: var(--panel);
   background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
   background-size: 20px 20px;
@@ -11,7 +22,7 @@
 .plan svg.map {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
 }
 /* La tiza vive en un <canvas> superpuesto al SVG (chalk.ts); sin esta regla el
    canvas no tenía posición propia (quedaba fuera de sitio, del tamaño de su
@@ -208,15 +219,26 @@
   min-height: 0;
 }
 
+/* El informe del caso (§17.3): en v1 es una tarjeta con fondo, acento rojo a
+ * la izquierda y texto que puede ocupar varias líneas (`.brief{background;
+ * border-left:4px solid var(--pencil);padding}`). Aquí se quedaba en una
+ * tira de una sola línea sin fondo (`white-space:nowrap` + ellipsis): con la
+ * frase real (víctima, sala, hora) casi siempre más larga que el hueco
+ * disponible, se veía cortada a la mitad — la "caja gris rara encima del
+ * plano" no era solo el bug de grid ya corregido, sino que esta frase ni
+ * siquiera cabía. Se deja envolver en varias líneas, como en v1. */
 .brief {
   flex: none;
-  padding: 6px 12px;
-  font-size: 0.85rem;
-  color: var(--ink-2);
-  border-bottom: 1px solid var(--grid);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: block;
+  text-align: left;
+  background: var(--panel);
+  border: 0;
+  border-left: 4px solid var(--pencil);
+  margin: 8px 10px 0;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+  color: var(--ink);
+  line-height: 1.35;
 }
 .brief b {
   color: var(--pencil);
@@ -226,16 +248,14 @@
   flex: none;
   padding: 8px 10px 0;
 }
+/* §17.3: "alto = min(ancho × 9/12, 46dvh)". Con aspect-ratio ya fijada en
+ * .plan (arriba), esto es solo el tope de alto: si el ancho disponible haría
+ * que .plan pasara de 46dvh, el navegador reduce el ancho para mantener la
+ * proporción 12:9 (y centra con margin:auto), en vez de estirar el alto por
+ * su cuenta como con una altura fija — así nunca puede desalinearse del SVG. */
 .plan-wrap .plan {
-  height: min(46dvh, 46vh);
-  overflow: hidden;
-}
-.plan-wrap .plan svg.map {
-  height: 100%;
-  width: auto;
-  max-width: 100%;
+  max-height: min(46dvh, 46vh);
   margin: 0 auto;
-  display: block;
 }
 
 .times {
@@ -414,6 +434,21 @@
   padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
   -webkit-overflow-scrolling: touch;
 }
+/* Las tres secciones (Pistas/Objetos/Caso) se pintan siempre las tres
+ * (ui/board.ts#renderSheet); en móvil/tableta solo se ve la pestaña activa
+ * (data-active-tab, junto con .sheet-tabs). En escritorio (más abajo, §17.3)
+ * se ven las tres a la vez y las pestañas se ocultan. */
+.sheet-section {
+  display: none;
+}
+.sheet-body[data-active-tab='pistas'] .sheet-section[data-panel='pistas'],
+.sheet-body[data-active-tab='objetos'] .sheet-section[data-panel='objetos'],
+.sheet-body[data-active-tab='caso'] .sheet-section[data-panel='caso'] {
+  display: block;
+}
+.sheet-h2 {
+  display: none;
+}
 .game[data-sheet='desplegada'] .sheet-panel {
   position: fixed;
   inset: 0;
@@ -477,9 +512,18 @@
   flex: 1;
   min-height: 0;
   padding: 10px;
+  display: flex;
+  align-items: center;
 }
+/* Mismo motivo que en .plan-wrap .plan de más arriba: el tope de altura va
+ * en .plan (aquí, el 100% del hueco disponible, que sí tiene una altura
+ * definida gracias a flex:1), y aspect-ratio hace que el ancho se ajuste
+ * solo. .plan-wrap centra verticalmente con flex por si el ancho disponible
+ * es tan grande que .plan queda más bajo que el hueco entero. */
 .plan-overlay .plan-wrap .plan {
-  height: 100%;
+  width: 100%;
+  max-height: 100%;
+  margin: 0 auto;
 }
 .plan-overlay .plan-close {
   position: absolute;
@@ -546,7 +590,7 @@
     overflow-y: auto;
   }
   .plan-wrap .plan {
-    height: 46vh;
+    max-height: 46vh;
   }
   .sheet-panel {
     grid-column: 2;
@@ -558,6 +602,34 @@
   }
   .sheet-handle {
     display: none;
+  }
+  /* Pistas y Objetos visibles a la vez, sin pestañas (§17.3). */
+  .sheet-tabs {
+    display: none;
+  }
+  .sheet-section {
+    display: block !important;
+    margin-bottom: 22px;
+  }
+  .sheet-section:last-child {
+    margin-bottom: 0;
+  }
+  .sheet-h2 {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 1.5rem;
+    line-height: 1;
+    margin: 0 0 0.6em;
+  }
+  .sheet-h2 small {
+    font-family: var(--body);
+    font-weight: 400;
+    font-size: 0.8rem;
+    color: var(--ink-2);
   }
   .actionbar {
     grid-column: 2;
