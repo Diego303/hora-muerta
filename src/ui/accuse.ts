@@ -1,11 +1,20 @@
 // Hoja de acusación (§14.3): dos selectores (culpable y arma) y el botón
 // Acusar. Los descartados aparecen atenuados, pero se pueden elegir. Un error
-// no revela qué parte falló.
+// no revela qué parte falló. Qué pasa con el resultado (cerrar el caso, avisar
+// cuántas quedan) lo decide quien llama: el presupuesto de errores no es
+// siempre "2 por caso" (un expediente lo comparte entre sus 3 noches, §13).
 import type { ClueTextContext } from '../engine/text';
+import type { AccusationOutcome } from '../game/scoring';
 import type { GameStore } from '../game/store';
-import { toast } from './toast';
 
-export function openAccuseSheet(ctx: ClueTextContext, store: GameStore, onTerminal: () => void): void {
+export interface AccuseOptions {
+  /** Texto del contador de errores ("Errores: 1/2", o para un expediente
+   * "Quedan 2 acusaciones para todo el expediente"). */
+  errorsLabel: string;
+  onOutcome: (outcome: AccusationOutcome) => void;
+}
+
+export function openAccuseSheet(ctx: ClueTextContext, store: GameStore, options: AccuseOptions): void {
   const state = store.getState();
   const overlay = document.createElement('div');
   overlay.className = 'accuse-overlay';
@@ -22,7 +31,7 @@ export function openAccuseSheet(ctx: ClueTextContext, store: GameStore, onTermin
     <div class="accuse-sheet">
       <button class="icon-btn accuse-close" aria-label="Cerrar">✕</button>
       <h2>Acusación</h2>
-      <p class="errs">Errores: ${state.errors}/2</p>
+      <p class="errs">${options.errorsLabel}</p>
       <p class="lbl">¿Quién fue?</p>
       <div class="accuse-row">${susOptions}</div>
       <p class="lbl">¿Con qué?</p>
@@ -65,11 +74,6 @@ export function openAccuseSheet(ctx: ClueTextContext, store: GameStore, onTermin
     store.setAccuseWeapon(selObj);
     const outcome = store.accuse();
     close();
-    if (outcome.correct || outcome.result === 'archived') {
-      onTerminal();
-      return;
-    }
-    const left = 2 - outcome.errors;
-    toast(`No encaja con los hechos. Te queda ${left} acusación${left === 1 ? '' : 'es'}.`);
+    options.onOutcome(outcome);
   });
 }

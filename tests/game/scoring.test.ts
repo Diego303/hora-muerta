@@ -62,5 +62,11 @@ describe('game/scoring', () => {
       const outcome = checkAccusation(CASE, otherCulprit, CASE.weapon, 1);
       expect(outcome).toEqual({ correct: false, errors: 2, result: 'archived' });
     });
+
+    it('con maxErrors=Infinity (una noche de expediente, §13) nunca archiva por sí sola', () => {
+      const otherCulprit = (CASE.culprit + 1) % CASE.N;
+      const outcome = checkAccusation(CASE, otherCulprit, CASE.weapon, 10, Number.POSITIVE_INFINITY);
+      expect(outcome).toEqual({ correct: false, errors: 11, result: 'playing' });
+    });
   });
 });

@@ -30,7 +30,7 @@ import { fnv1a, pick, rngFromSeed, shuffle } from './rng';
 import type { ClueTextContext } from './text';
 import { clueText, plainText } from './text';
 import { buildTruth, generateNight, generateObjectAssignment, planNight } from './truth';
-import type { CaseDef, Clue, ClueKind, MapDef, MapId, Step, Truth } from './types';
+import type { CaseDef, CaseMode, Clue, ClueKind, MapDef, MapId, Step, Truth } from './types';
 
 export interface DifficultyParams {
   N: number;
@@ -76,6 +76,34 @@ const MINIMIZE_LIMIT = 4000;
 const COURTESY_TYPES: ClueKind[] = ['at', 'ncarry', 'together'];
 
 export type CaseDraft = Omit<CaseDef, 'id' | 'mode' | 'map'> & { map: MapDef };
+
+/** `CaseDraft` -> `CaseDef`: le asigna `id`/`mode` (quien coloca el caso en un
+ * grupo, banco o modo infinito) y reduce `map` al id (§5). Compartida entre
+ * `scripts/build-bank.ts` y `workers/generator.worker.ts` para no duplicar
+ * esta conversión en dos sitios. */
+export function draftToCaseDef(draft: CaseDraft, id: string, mode: CaseMode): CaseDef {
+  return {
+    v: draft.v,
+    id,
+    mode,
+    diff: draft.diff,
+    map: draft.map.id,
+    cast: draft.cast,
+    objects: draft.objects,
+    victim: draft.victim,
+    motive: draft.motive,
+    N: draft.N,
+    T: draft.T,
+    rv: draft.rv,
+    td: draft.td,
+    culprit: draft.culprit,
+    weapon: draft.weapon,
+    truth: draft.truth,
+    clues: draft.clues,
+    solve: draft.solve,
+    sig: draft.sig,
+  };
+}
 
 function clueScore(clue: Clue, diff: DiffIndex): number {
   return CLUE_WEIGHTS[diff][clue.k] * CLUE_STRENGTH[clue.k] ** 2;

@@ -7,8 +7,10 @@ import { buildTextContext } from '../engine/generate';
 import { hintPush, stepExplanation, stepFocus, timeLabel } from '../engine/text';
 import type { CaseDef, MapDef, Room } from '../engine/types';
 import { markPlayed } from '../game/bank';
+import { completeNight, loadSeriesProgress, registerSeriesError } from '../game/expediente';
 import { nextHint } from '../game/hints';
 import { recordDailyResult, todayKey } from '../game/modes';
+import type { AccusationOutcome } from '../game/scoring';
 import { computeStars } from '../game/scoring';
 import { clearSavedGame, loadSavedGame, saveGame } from '../game/session';
 import type { ChalkColor, MarkValue } from '../game/store';
@@ -21,6 +23,7 @@ import { renderClosure } from './closure';
 import { renderObjectsTable } from './objects';
 import { buildPlan } from './plan';
 import type { PlanHandle, SuspectView } from './plan';
+import { toast } from './toast';
 
 export interface BoardOptions {
   onExit: () => void;
@@ -53,7 +56,11 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   const map = findMap(caseData.map);
   const textCtx = buildTextContext(map, caseData.cast, caseData.objects);
   const suspects: SuspectView[] = textCtx.suspects.map((s) => ({ name: s.name, init: s.name[0], color: s.color }));
-  const store = createGameStore(caseData, map.rooms.length, nextHint);
+  // Un expediente comparte el presupuesto de errores entre sus 3 noches
+  // (§13): esta noche por sí sola nunca se archiva; el handler de la
+  // acusación (más abajo) lleva la cuenta compartida aparte.
+  const maxErrors = caseData.mode === 'expediente' ? Number.POSITIVE_INFINITY : 2;
+  const store = createGameStore(caseData, map.rooms.length, nextHint, maxErrors);
 
   // Caso en curso (§18, hm2:game): retoma el progreso guardado si es el mismo
   // caso; si no, empieza de cero. Abrir la web no lo descarta; solo cerrar el
@@ -183,7 +190,25 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   });
   hintExplainBtn.addEventListener('click', () => store.explainHint());
   root.querySelector('#accuseBtn')?.addEventListener('click', () => {
-    openAccuseSheet(textCtx, store, () => showClosure());
+    if (caseData.mode === 'expediente') {
+      const errorsLeft = loadSeriesProgress()?.errorsLeft ?? 3;
+      openAccuseSheet(textCtx, store, {
+        errorsLabel: `Quedan ${errorsLeft} acusación${errorsLeft === 1 ? '' : 'es'} para todo el expediente.`,
+        onOutcome: (outcome) => handleExpedienteOutcome(outcome),
+      });
+      return;
+    }
+    openAccuseSheet(textCtx, store, {
+      errorsLabel: `Errores: ${store.getState().errors}/2`,
+      onOutcome: (outcome) => {
+        if (outcome.correct || outcome.result === 'archived') {
+          showClosure();
+          return;
+        }
+        const left = 2 - outcome.errors;
+        toast(`No encaja con los hechos. Te queda ${left} acusación${left === 1 ? '' : 'es'}.`);
+      },
+    });
   });
   root.querySelector('#sheetHandle')?.addEventListener('click', () => store.toggleSheet());
   root.querySelectorAll<HTMLButtonElement>('.sheet-tabs button[data-tab]').forEach((button) => {
@@ -426,6 +451,32 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     expandCleanup?.();
   }
 
+  // Expediente (§13): el presupuesto de errores es de las 3 noches juntas, no
+  // de esta sola; una acusación errónea gasta el presupuesto COMPARTIDO
+  // (game/expediente.ts), y solo se archiva la noche (con store.forceArchive(),
+  // ya que esta noche por sí sola nunca lo hace: ver el maxErrors de arriba)
+  // cuando se agota para toda la serie.
+  function handleExpedienteOutcome(outcome: AccusationOutcome): void {
+    if (outcome.correct) {
+      showClosure();
+      return;
+    }
+    const progress = loadSeriesProgress();
+    if (!progress) {
+      toast('No encaja con los hechos.');
+      return;
+    }
+    const updated = registerSeriesError(progress);
+    if (updated.done) {
+      store.forceArchive();
+      showClosure();
+      return;
+    }
+    toast(`No encaja con los hechos. Quedan ${updated.errorsLeft} acusación${updated.errorsLeft === 1 ? '' : 'es'} para todo el expediente.`);
+  }
+
+  const EXPEDIENTE_NIGHTS = 3;
+
   function showClosure(): void {
     const finalState = store.getState();
     cleanup();
@@ -438,6 +489,10 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
         hints: finalState.hintsUsed,
         time: finalState.elapsed,
       });
+    }
+    if (caseData.mode === 'expediente' && finalState.result === 'solved') {
+      const progress = loadSeriesProgress();
+      if (progress) completeNight(progress, computeStars(finalState.errors, finalState.hintsUsed), EXPEDIENTE_NIGHTS);
     }
     let closureCleanup: (() => void) | null = null;
     closureCleanup = renderClosure(root, map, caseData, textCtx, suspects, store, {

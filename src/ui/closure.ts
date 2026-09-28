@@ -37,9 +37,15 @@ export function renderClosure(
   const errorsPhrase = state.errors ? `${state.errors} error${state.errors === 1 ? '' : 'es'}` : 'sin errores';
   const hintsPhrase = state.hintsUsed ? `, ${state.hintsUsed} pista${state.hintsUsed === 1 ? '' : 's'}` : '';
   const shareText = solved ? `Hora Muerta: caso resuelto ${starsText(stars)}, ${errorsPhrase}${hintsPhrase}.` : 'Hora Muerta: caso archivado sin resolver.';
-  // #caso=<id> (§12.5): solo funciona para casos del banco (novato/inspector/
-  // comisario/diario); expediente y modo infinito no están enlazados todavía.
-  const caseLink = `${location.origin}${import.meta.env.BASE_URL}#caso=${caseData.id}`;
+  // #caso=<id> para casos del banco; #gen=<semilla>&n=<nivel>&m=<mapa> para
+  // modo infinito (§12.5), reconocible por el prefijo INF- que le pone
+  // draftToCaseDef(). El expediente no tiene enlace propio (§12.5 no define
+  // uno para series): se oculta el botón en vez de copiar un enlace roto.
+  const base = `${location.origin}${import.meta.env.BASE_URL}`;
+  const caseLink = caseData.id.startsWith('INF-')
+    ? `${base}#gen=${caseData.id.slice('INF-'.length)}&n=${caseData.diff}&m=${caseData.map}`
+    : `${base}#caso=${caseData.id}`;
+  const showLink = caseData.mode !== 'expediente';
 
   root.innerHTML = `
     <div class="closure-sheet">
@@ -55,7 +61,7 @@ export function renderClosure(
       <div class="closure-actions">
         <button class="btn ghost" id="reconBtn">Ver la noche en el plano</button>
         <button class="btn ghost" id="shareBtn">Copiar resultado</button>
-        <button class="btn ghost" id="linkBtn">Copiar enlace a este caso</button>
+        ${showLink ? '<button class="btn ghost" id="linkBtn">Copiar enlace a este caso</button>' : ''}
         <button class="btn ghost" id="backBtn">Volver a la portada</button>
       </div>
     </div>

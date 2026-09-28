@@ -1,11 +1,18 @@
-import type { BankFile, CaseDef, CaseMode, MapId } from './engine/types';
-import { loadBank, modeForDiff, nextUnplayed } from './game/bank';
+import type { DiffIndex } from './engine/clues';
+import { rngFromSeed, shuffle } from './engine/rng';
+import type { BankFile, CaseDef, CaseMode, MapId, SeriesDef } from './engine/types';
+import { getOrderSeed, getPlayed, loadBank, markPlayed, modeForDiff, nextUnplayed } from './game/bank';
+import type { SeriesProgress } from './game/expediente';
+import { clearSeriesProgress, loadExpedientes, loadSeriesProgress, startSeries } from './game/expediente';
+import type { InfiniteSession } from './game/infinite';
+import { reproduceCase, startInfiniteSession } from './game/infinite';
 import { getDailyCase } from './game/modes';
 import { clearSavedGame, loadSavedGame } from './game/session';
 import { initTheme, wireThemeToggles } from './ui/a11y';
 import { renderBoard } from './ui/board';
 import { renderExhausted } from './ui/exhausted';
 import { renderLanding } from './ui/landing';
+import { renderLoading } from './ui/loading';
 import { toast } from './ui/toast';
 
 const appEl = document.getElementById('app');
@@ -25,6 +32,9 @@ function showLanding(): void {
     },
     onResume: () => {
       void resumeGame();
+    },
+    onExpediente: () => {
+      void startExpediente();
     },
   });
   wireThemeToggles();
@@ -47,7 +57,9 @@ function showExhausted(bank: BankFile, mapFilter: MapId | null): void {
     onRestart: () => {
       void startCasual(bank.mode as Exclude<CaseMode, 'diario' | 'expediente'>, mapFilter);
     },
-    onInfinite: () => toast('El modo infinito llega en breve.'),
+    onInfinite: () => {
+      showInfinite(bank.cases[0].diff, mapFilter);
+    },
     onBackToLanding: showLanding,
   });
   cleanup = null;
@@ -69,12 +81,13 @@ async function startCasual(mode: Exclude<CaseMode, 'diario' | 'expediente'>, map
 
 async function nextCase(finished: CaseDef, mapFilter: MapId | null): Promise<void> {
   // El caso del día es uno solo para todos (§13): no hay "siguiente" dentro del
-  // mismo día. El expediente aún no está implementado (llega con modo infinito).
-  if (finished.mode === 'diario' || finished.mode === 'expediente') {
+  // mismo día. El expediente tiene su propio flujo (showExpedienteNight);
+  // nunca llega aquí.
+  if (finished.mode === 'diario') {
     showLanding();
     return;
   }
-  await startCasual(finished.mode, mapFilter);
+  await startCasual(finished.mode as Exclude<CaseMode, 'diario' | 'expediente'>, mapFilter);
 }
 
 async function startDaily(): Promise<void> {
@@ -97,7 +110,7 @@ async function resumeGame(): Promise<void> {
     return;
   }
   if (saved.mode === 'expediente') {
-    toast('Reanudar un expediente llega en breve.');
+    await resumeExpediente();
     return;
   }
   try {
@@ -115,8 +128,128 @@ async function resumeGame(): Promise<void> {
   }
 }
 
-/** Enlaces (§12.5): #caso=I-142 abre ese caso concreto del banco. #gen=... (modo
- * infinito) queda para cuando exista el generador en un Web Worker. */
+/** Expediente (§13): 3 noches con el mismo reparto y un presupuesto de errores
+ * compartido (game/expediente.ts); "sin repetir" se aplica a la serie entera,
+ * no a cada noche por separado, con su propia clave de versión (bank.ts). */
+function expedienteVersionKey(bankVersion: string): string {
+  return `expediente:${bankVersion}`;
+}
+
+async function startExpediente(): Promise<void> {
+  try {
+    const data = await loadExpedientes();
+    if (data.series.length === 0) {
+      toast('Todavía no hay expedientes disponibles.');
+      return;
+    }
+    const versionKey = expedienteVersionKey(data.version);
+    const rng = rngFromSeed(`${getOrderSeed()}|${versionKey}`);
+    const order = shuffle(rng, data.series);
+    const played = getPlayed(versionKey);
+    const series = order.find((s) => !played.has(s.id));
+    if (!series) {
+      toast('Has jugado todos los expedientes disponibles.');
+      return;
+    }
+    const progress = startSeries(series.id, data.version);
+    showExpedienteNight(series, progress);
+  } catch {
+    toast('No se ha podido cargar el expediente.');
+  }
+}
+
+async function resumeExpediente(): Promise<void> {
+  const progress = loadSeriesProgress();
+  if (!progress) {
+    showLanding();
+    return;
+  }
+  try {
+    const data = await loadExpedientes();
+    const series = data.series.find((s) => s.id === progress.id);
+    if (!series) {
+      clearSeriesProgress();
+      toast('Ese expediente ya no está disponible.');
+      showLanding();
+      return;
+    }
+    showExpedienteNight(series, progress);
+  } catch {
+    toast('No se ha podido retomar el expediente. Comprueba tu conexión e inténtalo de nuevo.');
+  }
+}
+
+function showExpedienteNight(series: SeriesDef, progress: SeriesProgress): void {
+  cleanup?.();
+  cleanup = renderBoard(app, series.cases[progress.index], {
+    onExit: showLanding,
+    onNextCase: () => {
+      void advanceExpediente(series);
+    },
+    bankVersion: null,
+  });
+}
+
+async function advanceExpediente(series: SeriesDef): Promise<void> {
+  const progress = loadSeriesProgress();
+  if (!progress || progress.done) {
+    const stars = progress?.starsSoFar ?? 0;
+    markPlayed(expedienteVersionKey(progress?.version ?? ''), series.id);
+    clearSeriesProgress();
+    toast(`Expediente cerrado: ${stars}/9 estrellas.`);
+    showLanding();
+    return;
+  }
+  showExpedienteNight(series, progress);
+}
+
+/** Modo infinito (§13): genera en un Web Worker, con presupuesto de 8 s por
+ * caso; el siguiente se pregenera mientras se juega el actual. */
+function showInfinite(diff: DiffIndex, mapFilter: MapId | null): void {
+  const session = startInfiniteSession(diff, mapFilter);
+  cleanup?.();
+  cleanup = renderLoading(app, 'Generando un caso nuevo…');
+  void session.next().then((caseData) => {
+    if (!caseData) {
+      toast('No se ha podido generar un caso a tiempo. Inténtalo de nuevo.');
+      session.destroy();
+      showLanding();
+      return;
+    }
+    showInfiniteBoard(caseData, session, diff, mapFilter);
+  });
+}
+
+function showInfiniteBoard(caseData: CaseDef, session: InfiniteSession, diff: DiffIndex, mapFilter: MapId | null): void {
+  session.pregenerate();
+  cleanup?.();
+  cleanup = renderBoard(app, caseData, {
+    onExit: () => {
+      session.destroy();
+      showLanding();
+    },
+    onNextCase: () => {
+      void nextInfiniteCase(session, diff, mapFilter);
+    },
+    bankVersion: null,
+  });
+}
+
+async function nextInfiniteCase(session: InfiniteSession, diff: DiffIndex, mapFilter: MapId | null): Promise<void> {
+  cleanup?.();
+  cleanup = renderLoading(app, 'Generando el siguiente caso…');
+  const caseData = await session.next();
+  if (!caseData) {
+    toast('No se ha podido generar el siguiente caso a tiempo.');
+    session.destroy();
+    showLanding();
+    return;
+  }
+  showInfiniteBoard(caseData, session, diff, mapFilter);
+}
+
+/** Enlaces (§12.5): #caso=I-142 abre ese caso concreto del banco;
+ * #gen=<semilla>&n=<nivel>&m=<mapa> reproduce un caso de modo infinito. */
 const ID_PREFIX_TO_MODE: Record<string, CaseMode> = { N: 'novato', I: 'inspector', C: 'comisario', D: 'diario' };
 
 async function openLinkedCase(id: string): Promise<void> {
@@ -141,10 +274,36 @@ async function openLinkedCase(id: string): Promise<void> {
   }
 }
 
+async function openGenLink(seed: string, diff: DiffIndex, mapId: MapId | undefined): Promise<void> {
+  cleanup?.();
+  cleanup = renderLoading(app, 'Generando ese caso…');
+  const caseData = await reproduceCase(seed, diff, mapId);
+  if (!caseData) {
+    toast('No se ha podido reproducir ese caso.');
+    showLanding();
+    return;
+  }
+  cleanup?.();
+  cleanup = renderBoard(app, caseData, {
+    onExit: showLanding,
+    onNextCase: () => showLanding(),
+    bankVersion: null,
+  });
+}
+
 function routeFromHash(): void {
-  const caso = new URLSearchParams(location.hash.slice(1)).get('caso');
+  const params = new URLSearchParams(location.hash.slice(1));
+  const caso = params.get('caso');
   if (caso) {
     void openLinkedCase(caso);
+    return;
+  }
+  const gen = params.get('gen');
+  if (gen) {
+    const diffRaw = Number(params.get('n'));
+    const diff: DiffIndex = diffRaw === 1 || diffRaw === 2 ? diffRaw : 0;
+    const mapId = params.get('m') as MapId | null;
+    void openGenLink(gen, diff, mapId ?? undefined);
     return;
   }
   showLanding();

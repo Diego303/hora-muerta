@@ -128,9 +128,17 @@ export interface GameStore {
     hintsUsed: number;
     elapsed: number;
   }): void;
+  /** Fuerza el cierre como archivado, sin pasar por accuse() (expediente,
+   * §13: el presupuesto de errores es de la serie, no de esta noche). */
+  forceArchive(): void;
 }
 
-export function createGameStore(caseData: CaseDef, roomCount: number, computeHint: (caseData: CaseDef, roomCount: number, state: GameState) => Hint): GameStore {
+export function createGameStore(
+  caseData: CaseDef,
+  roomCount: number,
+  computeHint: (caseData: CaseDef, roomCount: number, state: GameState) => Hint,
+  maxErrors = 2,
+): GameStore {
   const state: GameState = {
     caseData,
     hour: 0,
@@ -343,7 +351,7 @@ export function createGameStore(caseData: CaseDef, roomCount: number, computeHin
       if (state.accuseCulprit === null || state.accuseWeapon === null) {
         return { correct: false, errors: state.errors, result: state.result };
       }
-      const outcome = checkAccusation(state.caseData, state.accuseCulprit, state.accuseWeapon, state.errors);
+      const outcome = checkAccusation(state.caseData, state.accuseCulprit, state.accuseWeapon, state.errors, maxErrors);
       state.errors = outcome.errors;
       state.result = outcome.result;
       notify();
@@ -376,6 +384,10 @@ export function createGameStore(caseData: CaseDef, roomCount: number, computeHin
       state.errors = saved.errors;
       state.hintsUsed = saved.hintsUsed;
       state.elapsed = saved.elapsed;
+      notify();
+    },
+    forceArchive() {
+      state.result = 'archived';
       notify();
     },
   };

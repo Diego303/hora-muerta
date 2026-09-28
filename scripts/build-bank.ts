@@ -13,7 +13,7 @@ import path from 'node:path';
 import { CAST } from '../src/engine/content/cast';
 import { MAPS } from '../src/engine/content/maps';
 import type { CaseDraft } from '../src/engine/generate';
-import { buildCaseCandidate } from '../src/engine/generate';
+import { buildCaseCandidate, draftToCaseDef } from '../src/engine/generate';
 import { fnv1a, rngFromSeed, shuffle } from '../src/engine/rng';
 import type { CaseDef, CaseMode, MapId, SeriesDef } from '../src/engine/types';
 import { BANK_GROUPS, BANK_VERSION, EXPEDIENTE_ID_PREFIX, EXPEDIENTE_SERIES_COUNT } from './bank.config';
@@ -22,30 +22,6 @@ const OUT_DIR = path.join(process.cwd(), 'public', 'cases');
 const MAP_IDS: MapId[] = MAPS.map((m) => m.id);
 const MAX_RETRIES_PER_SLOT = 6;
 const EXPEDIENTE_DIFFS = [0, 1, 2] as const;
-
-function draftToCaseDef(draft: CaseDraft, id: string, mode: CaseMode): CaseDef {
-  return {
-    v: draft.v,
-    id,
-    mode,
-    diff: draft.diff,
-    map: draft.map.id,
-    cast: draft.cast,
-    objects: draft.objects,
-    victim: draft.victim,
-    motive: draft.motive,
-    N: draft.N,
-    T: draft.T,
-    rv: draft.rv,
-    td: draft.td,
-    culprit: draft.culprit,
-    weapon: draft.weapon,
-    truth: draft.truth,
-    clues: draft.clues,
-    solve: draft.solve,
-    sig: draft.sig,
-  };
-}
 
 function padId(prefix: string, index: number, width = 3): string {
   return `${prefix}-${String(index + 1).padStart(width, '0')}`;

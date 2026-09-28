@@ -238,3 +238,15 @@ footer {
 .exhausted-actions .btn {
   justify-content: center;
 }
+
+/* Espera del modo infinito (§13): generar un caso puede tardar unos segundos. */
+.loading {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  text-align: center;
+  color: var(--ink-2);
+}

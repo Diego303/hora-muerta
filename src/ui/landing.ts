@@ -20,6 +20,7 @@ export interface LandingOptions {
   onStart: (diff: 0 | 1 | 2, mapFilter: MapId | null) => void;
   onDaily: () => void;
   onResume: () => void;
+  onExpediente: () => void;
 }
 
 export function renderLanding(root: HTMLElement, options: LandingOptions): () => void {
@@ -47,6 +48,7 @@ export function renderLanding(root: HTMLElement, options: LandingOptions): () =>
           <div class="ctas">
             <button class="btn" id="goDaily">Jugar el caso del día</button>
             <a class="btn ghost" href="#niveles">Elegir nivel</a>
+            <button class="btn ghost" id="goExpediente">Expediente</button>
           </div>
           <p class="resume" id="resume" hidden><button class="link" id="resumeBtn"></button></p>
         </div>
@@ -124,6 +126,7 @@ export function renderLanding(root: HTMLElement, options: LandingOptions): () =>
     });
   });
   root.querySelector('#goDaily')?.addEventListener('click', () => options.onDaily());
+  root.querySelector('#goExpediente')?.addEventListener('click', () => options.onExpediente());
 
   const resumeEl = root.querySelector<HTMLParagraphElement>('#resume');
   const resumeBtn = root.querySelector<HTMLButtonElement>('#resumeBtn');
