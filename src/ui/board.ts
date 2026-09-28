@@ -133,7 +133,20 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
           <button data-tab="objetos" aria-pressed="false">Objetos</button>
           <button data-tab="caso" aria-pressed="false">Caso</button>
         </div>
-        <div class="sheet-body" id="sheetBody"></div>
+        <div class="sheet-body" id="sheetBody">
+          <section class="sheet-section" data-panel="pistas">
+            <h2 class="sheet-h2">Pistas <small>Toca una pista para tacharla</small></h2>
+            <div id="pistasBody"></div>
+          </section>
+          <section class="sheet-section" data-panel="objetos">
+            <h2 class="sheet-h2">Objetos <small>✓ lo llevaba, ✗ no</small></h2>
+            <div id="objetosBody"></div>
+          </section>
+          <section class="sheet-section" data-panel="caso">
+            <h2 class="sheet-h2">Caso</h2>
+            <div id="casoBody"></div>
+          </section>
+        </div>
       </div>
       <div class="actionbar">
         <div class="hint-panel" id="hintPanel" hidden>
@@ -159,6 +172,9 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   const hintEl = requireEl<HTMLParagraphElement>(root, '#hint');
   const legendEl = requireEl<HTMLDivElement>(root, '#legend');
   const sheetBody = requireEl<HTMLDivElement>(root, '#sheetBody');
+  const pistasBody = requireEl<HTMLDivElement>(root, '#pistasBody');
+  const objetosBody = requireEl<HTMLDivElement>(root, '#objetosBody');
+  const casoBody = requireEl<HTMLDivElement>(root, '#casoBody');
   const hintPanel = requireEl<HTMLDivElement>(root, '#hintPanel');
   const hintText = requireEl<HTMLParagraphElement>(root, '#hintText');
   const hintExplainBtn = requireEl<HTMLButtonElement>(root, '#hintExplainBtn');
@@ -327,18 +343,19 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     }
   }
 
+  // Las tres secciones se pintan siempre las tres (§17.3): en móvil/tableta
+  // solo una está visible a la vez (la pestaña activa, vía CSS con
+  // data-active-tab); en escritorio (≥1100px) las tres se ven a la vez, sin
+  // pestañas, así que todas tienen que estar ya renderizadas y al día.
   function renderSheet(): void {
     const state = store.getState();
     root.querySelectorAll<HTMLButtonElement>('.sheet-tabs button[data-tab]').forEach((button) => {
       button.setAttribute('aria-pressed', String(button.dataset.tab === state.sheetTab));
     });
-    if (state.sheetTab === 'pistas') {
-      renderClueList(sheetBody, caseData.clues, textCtx, store);
-    } else if (state.sheetTab === 'objetos') {
-      renderObjectsTable(sheetBody, textCtx, store);
-    } else {
-      renderCaseTab(sheetBody, map, caseData, textCtx, store);
-    }
+    sheetBody.dataset.activeTab = state.sheetTab;
+    renderClueList(pistasBody, caseData.clues, textCtx, store);
+    renderObjectsTable(objetosBody, textCtx, store);
+    renderCaseTab(casoBody, map, caseData, textCtx, store);
   }
 
   function renderHint(): void {
