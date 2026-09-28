@@ -315,10 +315,6 @@ export function buildCaseCandidate(seed: string, diff: DiffIndex, mapId?: MapId,
     if (!withinCaps(clues, diff)) continue;
     if (countMovementClues(clues) < MIN_MOVEMENT_CLUES[diff]) continue;
 
-    const textCtx = buildTextContext(map, castIndices, objectIndices);
-    const readLength = clues.reduce((sum, clue) => sum + plainText(clueText(clue, textCtx)).length, 0);
-    if (readLength > MAX_READ_LENGTH[diff]) continue;
-
     if (params.courtesyClues > 0) {
       const alreadySelected = clues;
       const courtesyCandidates = shuffle(
@@ -327,6 +323,14 @@ export function buildCaseCandidate(seed: string, diff: DiffIndex, mapId?: MapId,
       );
       clues = clues.concat(courtesyCandidates.slice(0, params.courtesyClues));
     }
+
+    // El presupuesto de lectura (§6.3) se mide sobre las pistas que de verdad
+    // se sirven, incluida la de cortesía: si se midiera antes de añadirla (como
+    // ocurría aquí) un caso podía colarse por encima del tope real con la
+    // pista de cortesía puesta.
+    const textCtx = buildTextContext(map, castIndices, objectIndices);
+    const readLength = clues.reduce((sum, clue) => sum + plainText(clueText(clue, textCtx)).length, 0);
+    if (readLength > MAX_READ_LENGTH[diff]) continue;
 
     const finalClues = sortClues(clues);
     const humanCtx: HumanContext = { N: params.N, T: params.T, graph, rv: plan.rv, td: plan.td };
