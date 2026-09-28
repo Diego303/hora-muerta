@@ -10,6 +10,7 @@
 // minutos, sobre todo en Comisario.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { CAST } from '../src/engine/content/cast';
 import { MAPS } from '../src/engine/content/maps';
 import type { CaseDraft } from '../src/engine/generate';
@@ -27,7 +28,10 @@ function padId(prefix: string, index: number, width = 3): string {
   return `${prefix}-${String(index + 1).padStart(width, '0')}`;
 }
 
-function generateGroup(mode: Exclude<CaseMode, 'expediente'>, diff: 0 | 1 | 2, count: number, idPrefix: string, seenSignatures: Set<string>): CaseDef[] {
+/** Exportada para poder regenerar un único grupo (p. ej. tras arreglar un bug
+ * del generador que solo afecta a un nivel) sin tener que relanzar el banco
+ * entero; ver docs/DECISIONES.md. */
+export function generateGroup(mode: Exclude<CaseMode, 'expediente'>, diff: 0 | 1 | 2, count: number, idPrefix: string, seenSignatures: Set<string>): CaseDef[] {
   const cases: CaseDef[] = [];
   for (let slot = 0; slot < count; slot++) {
     const mapId = MAP_IDS[slot % MAP_IDS.length];
@@ -121,4 +125,6 @@ function main(): void {
   console.timeEnd('[build-bank] tiempo total');
 }
 
-main();
+// Solo al ejecutarse directamente (`pnpm bank:build`), no al importar
+// `generateGroup` desde otro script (p. ej. para regenerar un único grupo).
+if (fileURLToPath(import.meta.url) === process.argv[1]) main();

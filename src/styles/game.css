@@ -1153,28 +1153,37 @@ li.discarded .discard-btn .name {
 }
 
 /* =====================================================================
-   Pantallas muy bajas (§17.3): un móvil en horizontal tiene casi la misma
-   altura fija (100dvh) pero mucha menos que en vertical. Reservar el mismo
-   presupuesto del plano (46dvh) que en vertical deja casi sin sitio a
-   Pistas/Objetos/Caso y al botón Acusar:
-   - Por debajo de 700px de ancho, .game sigue en una sola columna en flex
-     (.game-main es flex:none, así que SIEMPRE se pinta entero, sin encoger);
-     si su contenido no cabe, es .sheet-panel (flex:1) quien se lleva el
-     recorte, hasta quedarse en una tira casi invisible.
-   - Entre 700 y 1099px de ancho (o con esta misma altura corta), .game ya
-     usa la rejilla de tableta con Pistas/Objetos/Caso en la columna derecha
-     (§17.3): con tan poca altura total, esa columna también se aplasta.
-   El plano se reduce en los dos casos; además, en la columna única se le
-   pone techo a .game-main con su propio scroll, para que la hoja de abajo y
-   el botón Acusar tengan sitio real en vez de lo que sobre. */
+   Hoja de Pistas/Objetos/Caso inutilizable en el móvil en una sola columna
+   (< 700px de ancho, §17.3): el problema no era solo de pantallas bajas en
+   horizontal (visto y corregido antes con las dos reglas de más abajo), sino
+   de CUALQUIER móvil en vertical con más contenido del que cabe.
+   .game-main (informe, plano, horas, herramientas, ayuda, leyenda) es
+   flex:none dentro de .game (flex-column, altura fija 100dvh): SIEMPRE se
+   pinta entero, sin encoger nunca. .sheet-panel (Pistas/Objetos/Caso) es
+   flex:1: se lleva lo que sobre, y si .game-main ya ocupa casi toda la
+   pantalla (algo real en teléfonos de referencia como 375×667: informe +
+   plano + horas + herramientas + subherramientas ya suman más de 500px, más
+   la barra superior y el botón Acusar) a .sheet-panel no le queda hueco real
+   — se ve el plano pero la hoja de pistas queda reducida a una tira de
+   pocos píxeles, o directamente 0: exactamente "veo el mapa pero no puedo
+   abrir el panel". Arreglo de raíz: .game-main gana su propio techo y
+   scroll interno, para que .sheet-panel SIEMPRE se quede con una porción de
+   alto real, sea cual sea el contenido de arriba. */
+@media (max-width: 699px) {
+  .game-main {
+    overflow-y: auto;
+    max-height: 52dvh;
+  }
+}
+
+/* Pantallas muy bajas (teléfono en horizontal): con una altura fija tan
+   corta, el mismo presupuesto del plano (46dvh) que en vertical deja
+   todavía menos margen; se reduce más el plano, tanto en la columna única
+   de arriba como en la rejilla de tableta (§17.3, 700-1099px de ancho, que
+   ya reparte Pistas/Objetos/Caso en su propia columna y no sufre el mismo
+   aplastamiento porque cada columna tiene su propia fila de la rejilla). */
 @media (max-height: 500px) {
   .plan-wrap .plan {
     max-height: 20dvh;
-  }
-}
-@media (max-width: 699px) and (max-height: 500px) {
-  .game-main {
-    overflow-y: auto;
-    max-height: 50dvh;
   }
 }

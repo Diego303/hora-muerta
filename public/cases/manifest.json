@@ -2,7 +2,7 @@
   "version": "2026.09-a",
   "counts": {
     "novato": 170,
-    "inspector": 160,
+    "inspector": 164,
     "comisario": 0,
     "diario": 55,
     "expediente": 0
@@ -10,11 +10,11 @@
   "files": {
     "novato.json": {
       "count": 170,
-      "hash": "1ecilp6"
+      "hash": "1pa5qgw"
     },
     "inspector.json": {
-      "count": 160,
-      "hash": "tgsj2h"
+      "count": 164,
+      "hash": "bweus2"
     },
     "comisario.json": {
       "count": 0,
