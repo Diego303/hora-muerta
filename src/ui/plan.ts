@@ -1,6 +1,7 @@
 // Render del plano (SVG), portado de v1 (buildPlan). Vive en ui/ porque usa el DOM;
 // el motor (src/engine) no depende de esto.
-import type { FeatureIcon, MapDef, RoomDef } from '../engine/types';
+import { timeLabel } from '../engine/text';
+import type { FeatureIcon, Hour, MapDef, RoomDef } from '../engine/types';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const GRID = 40;
@@ -40,7 +41,9 @@ export interface PlanHandle {
   height: number;
   hits: SVGRectElement[];
   setCrime(on: boolean): void;
-  marks(get: (room: number, suspect: number) => MarkValue, suspects: SuspectView[]): void;
+  /** `hour` solo hace falta para el `aria-label` dinámico de las salas
+   * (§17.9: "Cocina, 22:00. Bruno aquí. Clara no."), no cambia el dibujo. */
+  marks(get: (room: number, suspect: number) => MarkValue, suspects: SuspectView[], hour: Hour): void;
   /** Resalta las salas dadas (filtro de Ver, o pista enfocada en la lista, §17.6). */
   highlight(rooms: number[]): void;
   tokens(roomsAt: number[] | null, suspects: SuspectView[], show: boolean): void;
@@ -201,22 +204,26 @@ export function buildPlan(svg: SVGSVGElement, map: MapDef, opts: PlanOptions): P
     setCrime(on) {
       crimeOutline.style.display = on ? '' : 'none';
     },
-    marks(get, suspects) {
+    marks(get, suspects, hour) {
       gMarks.innerHTML = '';
       rects.forEach((rect, r) => {
         let slot = 0;
+        const said: string[] = [];
         for (let c = 0; c < suspects.length; c++) {
           const value = get(r, c);
           if (!value) continue;
+          const suspect = suspects[c];
+          said.push(`${suspect.name} ${value === 1 ? 'aquí' : 'no'}.`);
           const [x, y] = roomSlot(rect, slot);
           slot += 1;
-          const suspect = suspects[c];
           const group = svgEl('g', { class: `mk ${value === 1 ? 'yes' : 'no'}`, transform: `translate(${x},${y})` }, gMarks);
           svgEl('circle', { r: 10.5, fill: suspect.color, stroke: suspect.color }, group);
           const text = svgEl('text', {}, group);
           text.textContent = suspect.init;
           if (value === 2) svgEl('line', { x1: -9, y1: 9, x2: 9, y2: -9 }, group);
         }
+        // Sala con aria-label dinámico (§17.9): "Cocina, 22:00. Bruno aquí. Clara no."
+        hits[r]?.setAttribute('aria-label', `${map.rooms[r].name}, ${timeLabel(hour)}.${said.length ? ` ${said.join(' ')}` : ''}`);
       });
     },
     highlight(rooms) {

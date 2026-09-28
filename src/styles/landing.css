@@ -223,6 +223,11 @@
   padding: 0.35em 0.9em;
   font-size: 0.95rem;
   min-height: 44px;
+  /* Que envuelva en vez de desbordar horizontalmente a 360px (§17.9) si el
+   * texto es más largo de lo normal, como en un escenario bloqueado o una
+   * opción de Ajustes. */
+  max-width: 100%;
+  white-space: normal;
 }
 .chip[aria-pressed='true'] {
   border-color: var(--ink);
@@ -280,9 +285,14 @@ footer {
 
 /* Escenario bloqueado (§16.1): la ficha se ve, pero atenuada, con el rango
  * que hace falta en vez del nombre normal; no es seleccionable. */
+/* Sin opacity: el texto (qué rango hace falta) tiene que seguir leyéndose
+ * con contraste AA (§17.9); "bloqueado" ya lo dice el candado, el texto y
+ * el borde discontinuo, no hace falta atenuar el color. */
 .chip.locked {
-  opacity: 0.5;
+  border-style: dashed;
+  color: var(--ink-2);
   cursor: not-allowed;
+  text-align: center;
 }
 
 /* Barra de rango (§16.1, portada y perfil). */
@@ -329,6 +339,12 @@ footer {
   flex: none;
 }
 
+/* Desplazamiento horizontal propio (§17.9: nunca el body) si la tabla no
+ * cabe a 360px; mismo patrón que .objtable-scroll en game.css. */
+.gridwrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 .stats-table {
   border-collapse: collapse;
   width: 100%;
@@ -365,8 +381,12 @@ footer {
   border-bottom: 1px dashed var(--grid);
   min-height: 44px;
 }
-.arch-row.dim {
-  opacity: 0.5;
+/* Sin opacity, por el mismo motivo que .chip.locked: el nombre del
+ * arquetipo tiene que seguir leyéndose (§17.9). "Todavía no visto" ya lo
+ * dice el 0 de al lado; aquí solo se distingue con cursiva. */
+.arch-row.dim .arch-name {
+  font-style: italic;
+  color: var(--ink-2);
 }
 .arch-name {
   flex: 1;

@@ -49,6 +49,34 @@ function requireEl<T extends Element>(root: ParentNode, selector: string): T {
   return el;
 }
 
+/** Sala más cercana en una dirección (§17.9, flechas): la que tenga el centro
+ * más alineado con (dx,dy) desde la sala de partida, usando las coordenadas
+ * del propio plano (no el grafo de puertas: aquí es solo para mover el foco). */
+function roomInDirection(map: MapDef, from: number, dx: number, dy: number): number | null {
+  const center = (i: number): [number, number] => {
+    const r = map.rooms[i];
+    return [r.x + r.w / 2, r.y + r.h / 2];
+  };
+  const [fx, fy] = center(from);
+  let best: number | null = null;
+  let bestScore = Infinity;
+  map.rooms.forEach((_, i) => {
+    if (i === from) return;
+    const [tx, ty] = center(i);
+    const vx = tx - fx;
+    const vy = ty - fy;
+    const primary = vx * dx + vy * dy;
+    if (primary <= 0) return;
+    const lateral = Math.abs(vx * dy - vy * dx);
+    const score = primary + lateral * 2;
+    if (score < bestScore) {
+      bestScore = score;
+      best = i;
+    }
+  });
+  return best;
+}
+
 const CHALK_SWATCHES: { color: ChalkColor; label: string }[] = [
   { color: 'ink', label: 'Tinta' },
   { color: 'amber', label: 'Ámbar' },
@@ -150,7 +178,16 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         roomTap(room);
+        return;
       }
+      // Flechas para moverse entre salas (§17.9): la sala más próxima en esa
+      // dirección, tomando el centro de cada sala del propio plano.
+      const dir: Record<string, [number, number]> = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] };
+      const vector = dir[e.key];
+      if (!vector) return;
+      e.preventDefault();
+      const next = roomInDirection(map, room, vector[0], vector[1]);
+      if (next !== null) plan.hits[next]?.focus();
     });
   });
 
@@ -359,7 +396,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   function draw(): void {
     const state = store.getState();
     plan.setCrime(state.hour === caseData.td);
-    plan.marks((room, suspect) => (state.marks.get(markKey(state.hour, room, suspect)) ?? 0) as MarkValue, suspects);
+    plan.marks((room, suspect) => (state.marks.get(markKey(state.hour, room, suspect)) ?? 0) as MarkValue, suspects, state.hour);
 
     let highlightRooms: Room[] = [];
     if (state.mode === 'view' && state.filter) {
@@ -428,6 +465,35 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   }
   document.addEventListener('visibilitychange', onVisibilityChange);
 
+  // Atajos de teclado (§17.9): 1-6 elige sospechoso (Marcar/Ver), espacio
+  // cambia la marca (ya lo cubre el keydown de cada sala), [ y ] cambian de
+  // hora, z deshace. Se callan mientras la hoja de acusación está abierta
+  // (el plano ampliado no cuenta: es la misma mesa de trabajo, solo más grande).
+  function onGlobalKeydown(e: KeyboardEvent): void {
+    if (e.ctrlKey || e.metaKey || e.altKey) return; // no pisar atajos del navegador/SO
+    if (document.querySelector('.accuse-overlay')) return;
+    const state = store.getState();
+    if (e.key === 'z') {
+      store.undo();
+      return;
+    }
+    if (e.key === '[') {
+      store.setHour(Math.max(0, state.hour - 1));
+      return;
+    }
+    if (e.key === ']') {
+      store.setHour(Math.min(caseData.T - 1, state.hour + 1));
+      return;
+    }
+    if (state.mode === 'chalk') return;
+    if (!/^[1-6]$/.test(e.key)) return;
+    const index = Number(e.key) - 1;
+    if (index >= suspects.length) return;
+    if (state.mode === 'mark') store.selectSuspect(index);
+    else store.setFilter(state.filter?.type === 'sus' && state.filter.c === index ? null : { type: 'sus', c: index });
+  }
+  document.addEventListener('keydown', onGlobalKeydown);
+
   // Cronómetro (§14.2): oculto por defecto, pero se registra igualmente.
   const tickTimer = setInterval(() => store.tick(), 1000);
 
@@ -461,7 +527,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     const redrawExpanded = (): void => {
       const state = store.getState();
       expandedPlan.setCrime(state.hour === caseData.td);
-      expandedPlan.marks((room, suspect) => (state.marks.get(markKey(state.hour, room, suspect)) ?? 0) as MarkValue, suspects);
+      expandedPlan.marks((room, suspect) => (state.marks.get(markKey(state.hour, room, suspect)) ?? 0) as MarkValue, suspects, state.hour);
       overlay.querySelectorAll<HTMLButtonElement>('#timesExpanded button').forEach((button, i) => button.setAttribute('aria-pressed', String(i === state.hour)));
       overlay.classList.toggle('chalk-mode', state.mode === 'chalk');
       expandedChalk.redraw();
@@ -490,6 +556,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     unsaveSubscribe();
     if (saveTimer) clearTimeout(saveTimer);
     document.removeEventListener('visibilitychange', onVisibilityChange);
+    document.removeEventListener('keydown', onGlobalKeydown);
     clearInterval(tickTimer);
     chalk.destroy();
     expandCleanup?.();

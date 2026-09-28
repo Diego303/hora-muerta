@@ -352,6 +352,16 @@ function routeFromHash(): void {
   showLanding();
 }
 
+/** PWA (§19.1, §19.4): solo en producción, para no interferir con el recargado
+ * en caliente de `pnpm dev`. */
+function registerServiceWorker(): void {
+  if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
+    /* sin service worker el juego sigue funcionando, solo sin caché offline */
+  });
+}
+
 initTheme();
 migrateFromV1(computeStars);
+registerServiceWorker();
 routeFromHash();
