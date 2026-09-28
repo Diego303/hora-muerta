@@ -4,17 +4,20 @@
 import { VICTIMS } from '../engine/content/cast';
 import { MAPS } from '../engine/content/maps';
 import { buildTextContext } from '../engine/generate';
-import { hintPush, stepExplanation, stepFocus, timeLabel } from '../engine/text';
+import { buildGraph } from '../engine/graph';
+import { formatElapsed, hintPush, stepExplanation, stepFocus, timeLabel } from '../engine/text';
 import type { CaseDef, MapDef, Room } from '../engine/types';
 import { markPlayed } from '../game/bank';
 import { completeNight, loadSeriesProgress, registerSeriesError } from '../game/expediente';
 import { nextHint } from '../game/hints';
 import { recordDailyResult, todayKey } from '../game/modes';
+import { ARCHETYPE_LABELS, recordClosure } from '../game/progression';
 import type { AccusationOutcome } from '../game/scoring';
 import { computeStars } from '../game/scoring';
 import { clearSavedGame, loadSavedGame, saveGame } from '../game/session';
 import type { ChalkColor, MarkValue } from '../game/store';
 import { createGameStore, markKey } from '../game/store';
+import { effectiveMoveHelp, getProfile, getSettings, saveProfile } from '../game/storage';
 import { openAccuseSheet } from './accuse';
 import { setupChalk } from './chalk';
 import { renderCaseTab } from './casetab';
@@ -46,6 +49,34 @@ function requireEl<T extends Element>(root: ParentNode, selector: string): T {
   return el;
 }
 
+/** Sala más cercana en una dirección (§17.9, flechas): la que tenga el centro
+ * más alineado con (dx,dy) desde la sala de partida, usando las coordenadas
+ * del propio plano (no el grafo de puertas: aquí es solo para mover el foco). */
+function roomInDirection(map: MapDef, from: number, dx: number, dy: number): number | null {
+  const center = (i: number): [number, number] => {
+    const r = map.rooms[i];
+    return [r.x + r.w / 2, r.y + r.h / 2];
+  };
+  const [fx, fy] = center(from);
+  let best: number | null = null;
+  let bestScore = Infinity;
+  map.rooms.forEach((_, i) => {
+    if (i === from) return;
+    const [tx, ty] = center(i);
+    const vx = tx - fx;
+    const vy = ty - fy;
+    const primary = vx * dx + vy * dy;
+    if (primary <= 0) return;
+    const lateral = Math.abs(vx * dy - vy * dx);
+    const score = primary + lateral * 2;
+    if (score < bestScore) {
+      bestScore = score;
+      best = i;
+    }
+  });
+  return best;
+}
+
 const CHALK_SWATCHES: { color: ChalkColor; label: string }[] = [
   { color: 'ink', label: 'Tinta' },
   { color: 'amber', label: 'Ámbar' },
@@ -54,6 +85,7 @@ const CHALK_SWATCHES: { color: ChalkColor; label: string }[] = [
 
 export function renderBoard(root: HTMLElement, caseData: CaseDef, options: BoardOptions): () => void {
   const map = findMap(caseData.map);
+  const graph = buildGraph(map);
   const textCtx = buildTextContext(map, caseData.cast, caseData.objects);
   const suspects: SuspectView[] = textCtx.suspects.map((s) => ({ name: s.name, init: s.name[0], color: s.color }));
   // Un expediente comparte el presupuesto de errores entre sus 3 noches
@@ -74,6 +106,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
       <div class="gbar">
         <button class="icon-btn" id="exit" aria-label="Volver a la portada">←</button>
         <div class="ttl"><b>${map.name}</b></div>
+        <span class="timer" id="timerDisplay" aria-label="Tiempo" hidden></span>
         <div class="stars" id="starsDisplay">★★★</div>
       </div>
       <div class="game-main">
@@ -117,6 +150,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
 
   const gameRoot = requireEl<HTMLDivElement>(root, '#gameRoot');
   const starsDisplay = requireEl<HTMLDivElement>(root, '#starsDisplay');
+  const timerDisplay = requireEl<HTMLSpanElement>(root, '#timerDisplay');
   const briefEl = requireEl<HTMLButtonElement>(root, '#brief');
   const mapSvg = requireEl<SVGSVGElement>(root, '#mapSvg');
   const chalkCanvas = requireEl<HTMLCanvasElement>(root, '#chalkCanvas');
@@ -144,7 +178,16 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         roomTap(room);
+        return;
       }
+      // Flechas para moverse entre salas (§17.9): la sala más próxima en esa
+      // dirección, tomando el centro de cada sala del propio plano.
+      const dir: Record<string, [number, number]> = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] };
+      const vector = dir[e.key];
+      if (!vector) return;
+      e.preventDefault();
+      const next = roomInDirection(map, room, vector[0], vector[1]);
+      if (next !== null) plan.hits[next]?.focus();
     });
   });
 
@@ -320,10 +363,40 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     }
   }
 
+  /** Ayuda de movimiento (§17.4, §11, opcional según Ajustes/nivel): con un
+   * sospechoso seleccionado en Marcar que tenga ✓ en la hora anterior o
+   * siguiente, las salas a las que no pudo llegar en un paso del grafo se
+   * devuelven para rayarlas. Solo usa las marcas de la persona, nunca la
+   * verdad del caso. */
+  function moveHelpHatch(state: ReturnType<typeof store.getState>): Room[] {
+    if (state.mode !== 'mark' || state.selectedSuspect === null) return [];
+    if (!effectiveMoveHelp(getSettings(), caseData.diff)) return [];
+    const suspect = state.selectedSuspect;
+    const prevHour = state.hour > 0 ? state.hour - 1 : null;
+    const nextHour = state.hour < caseData.T - 1 ? state.hour + 1 : null;
+    const reachableFrom = (hour: number | null): Set<number> | null => {
+      if (hour === null) return null;
+      for (let r = 0; r < map.rooms.length; r++) {
+        if (state.marks.get(markKey(hour, r, suspect)) === 1) return new Set([r, ...graph.adj[r]]);
+      }
+      return null;
+    };
+    const fromPrev = reachableFrom(prevHour);
+    const fromNext = reachableFrom(nextHour);
+    if (!fromPrev && !fromNext) return [];
+    const hatch: Room[] = [];
+    for (let r = 0; r < map.rooms.length; r++) {
+      const okPrev = !fromPrev || fromPrev.has(r);
+      const okNext = !fromNext || fromNext.has(r);
+      if (!okPrev || !okNext) hatch.push(r);
+    }
+    return hatch;
+  }
+
   function draw(): void {
     const state = store.getState();
     plan.setCrime(state.hour === caseData.td);
-    plan.marks((room, suspect) => (state.marks.get(markKey(state.hour, room, suspect)) ?? 0) as MarkValue, suspects);
+    plan.marks((room, suspect) => (state.marks.get(markKey(state.hour, room, suspect)) ?? 0) as MarkValue, suspects, state.hour);
 
     let highlightRooms: Room[] = [];
     if (state.mode === 'view' && state.filter) {
@@ -339,14 +412,17 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     else if (state.hint?.kind === 'markError' && state.hint.room !== null) highlightRooms.push(state.hint.room);
     plan.highlight(highlightRooms);
 
+    // Estela (§17.4): se puede desactivar en Ajustes.
+    const trailOn = getSettings().trail;
     const prevHour = state.hour > 0 ? state.hour - 1 : null;
     const nextHour = state.hour < caseData.T - 1 ? state.hour + 1 : null;
     plan.trail(
-      prevHour === null ? null : (room, suspect) => (state.marks.get(markKey(prevHour, room, suspect)) ?? 0) as MarkValue,
-      nextHour === null ? null : (room, suspect) => (state.marks.get(markKey(nextHour, room, suspect)) ?? 0) as MarkValue,
+      !trailOn || prevHour === null ? null : (room, suspect) => (state.marks.get(markKey(prevHour, room, suspect)) ?? 0) as MarkValue,
+      !trailOn || nextHour === null ? null : (room, suspect) => (state.marks.get(markKey(nextHour, room, suspect)) ?? 0) as MarkValue,
       suspects,
     );
 
+    plan.hatchRooms(moveHelpHatch(state));
     chalk.redraw();
   }
 
@@ -358,6 +434,8 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     gameRoot.setAttribute('data-sheet', state.sheetState);
     const stars = computeStars(state.errors, state.hintsUsed);
     starsDisplay.textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+    timerDisplay.hidden = !getSettings().showTimer;
+    if (!timerDisplay.hidden) timerDisplay.textContent = formatElapsed(state.elapsed);
     renderSubtools();
     renderSheet();
     renderHint();
@@ -386,6 +464,35 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     if (document.hidden) flushSave();
   }
   document.addEventListener('visibilitychange', onVisibilityChange);
+
+  // Atajos de teclado (§17.9): 1-6 elige sospechoso (Marcar/Ver), espacio
+  // cambia la marca (ya lo cubre el keydown de cada sala), [ y ] cambian de
+  // hora, z deshace. Se callan mientras la hoja de acusación está abierta
+  // (el plano ampliado no cuenta: es la misma mesa de trabajo, solo más grande).
+  function onGlobalKeydown(e: KeyboardEvent): void {
+    if (e.ctrlKey || e.metaKey || e.altKey) return; // no pisar atajos del navegador/SO
+    if (document.querySelector('.accuse-overlay')) return;
+    const state = store.getState();
+    if (e.key === 'z') {
+      store.undo();
+      return;
+    }
+    if (e.key === '[') {
+      store.setHour(Math.max(0, state.hour - 1));
+      return;
+    }
+    if (e.key === ']') {
+      store.setHour(Math.min(caseData.T - 1, state.hour + 1));
+      return;
+    }
+    if (state.mode === 'chalk') return;
+    if (!/^[1-6]$/.test(e.key)) return;
+    const index = Number(e.key) - 1;
+    if (index >= suspects.length) return;
+    if (state.mode === 'mark') store.selectSuspect(index);
+    else store.setFilter(state.filter?.type === 'sus' && state.filter.c === index ? null : { type: 'sus', c: index });
+  }
+  document.addEventListener('keydown', onGlobalKeydown);
 
   // Cronómetro (§14.2): oculto por defecto, pero se registra igualmente.
   const tickTimer = setInterval(() => store.tick(), 1000);
@@ -420,7 +527,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     const redrawExpanded = (): void => {
       const state = store.getState();
       expandedPlan.setCrime(state.hour === caseData.td);
-      expandedPlan.marks((room, suspect) => (state.marks.get(markKey(state.hour, room, suspect)) ?? 0) as MarkValue, suspects);
+      expandedPlan.marks((room, suspect) => (state.marks.get(markKey(state.hour, room, suspect)) ?? 0) as MarkValue, suspects, state.hour);
       overlay.querySelectorAll<HTMLButtonElement>('#timesExpanded button').forEach((button, i) => button.setAttribute('aria-pressed', String(i === state.hour)));
       overlay.classList.toggle('chalk-mode', state.mode === 'chalk');
       expandedChalk.redraw();
@@ -449,6 +556,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     unsaveSubscribe();
     if (saveTimer) clearTimeout(saveTimer);
     document.removeEventListener('visibilitychange', onVisibilityChange);
+    document.removeEventListener('keydown', onGlobalKeydown);
     clearInterval(tickTimer);
     chalk.destroy();
     expandCleanup?.();
@@ -485,6 +593,24 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     cleanup();
     clearSavedGame();
     if (options.bankVersion) markPlayed(options.bankVersion, caseData.id);
+    // Progresión (§16): cada caso RESUELTO (no un archivado sin resolver)
+    // cuenta para el rango, los recuentos por nivel y el archivo de
+    // arquetipos, sea cual sea el modo (suelto, diario o una noche de
+    // expediente).
+    if (finalState.result === 'solved') {
+      const { profile, newArchetypes } = recordClosure(getProfile(), {
+        caseData,
+        stars: computeStars(finalState.errors, finalState.hintsUsed),
+        errors: finalState.errors,
+        elapsed: finalState.elapsed,
+      });
+      saveProfile(profile);
+      if (newArchetypes.length > 0) {
+        const labels = newArchetypes.map((a) => ARCHETYPE_LABELS[a]);
+        const joined = labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(', ')} y ${labels[labels.length - 1]}`;
+        toast(`Nuevo en tu archivo: ${joined}.`);
+      }
+    }
     if (caseData.mode === 'diario') {
       recordDailyResult(todayKey(), {
         stars: computeStars(finalState.errors, finalState.hintsUsed),

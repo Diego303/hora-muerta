@@ -29,6 +29,18 @@
   pointer-events: auto;
 }
 
+/* Tema sepia del plano (§16.1, rango Cabo): recolorea solo el plano, no el
+ * resto de la interfaz; funciona igual en claro y oscuro (es un acento de
+ * "papel viejo", no un tercer tema). */
+:root[data-plan-theme='sepia'] .plan {
+  --room: #f3e6d0;
+  --wall: #5b3a21;
+  --grid: #d8c19b;
+  --panel: #ede0c8;
+  --ink: #3c2a18;
+  --ink-2: #6b5031;
+}
+
 .room {
   fill: var(--room);
   stroke: var(--wall);
@@ -646,6 +658,11 @@
   border-collapse: collapse;
   width: 100%;
 }
+.objtable th,
+.objtable td {
+  border: 1px solid var(--grid);
+  padding: 0;
+}
 .objtable th {
   font-weight: 700;
   font-size: 0.85rem;
@@ -657,10 +674,12 @@
   text-align: center;
 }
 .objtable .cell {
+  display: block;
   width: 44px;
   height: 44px;
   min-height: 0;
-  border: 1px solid var(--grid);
+  margin: 0 auto;
+  border: 0;
   background: var(--paper);
   font-weight: 700;
 }

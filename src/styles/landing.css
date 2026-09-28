@@ -71,6 +71,33 @@
   font-size: 0.95rem;
 }
 
+/* Barra de rango de la portada (§16.1, §17.2): botón entero para ir al perfil. */
+.rank-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  max-width: 22em;
+  margin-top: 18px;
+  padding: 10px 14px;
+  border: 2px solid var(--grid);
+  border-radius: 4px;
+  background: transparent;
+  text-align: left;
+}
+.rank-chip b {
+  font-family: var(--display);
+  font-size: 1rem;
+}
+.rank-chip span:not(.rank-bar) {
+  font-size: 0.85rem;
+  color: var(--ink-2);
+}
+.rank-chip .rank-bar {
+  width: 100%;
+}
+
 .demo {
   margin: 0;
   position: relative;
@@ -196,6 +223,11 @@
   padding: 0.35em 0.9em;
   font-size: 0.95rem;
   min-height: 44px;
+  /* Que envuelva en vez de desbordar horizontalmente a 360px (§17.9) si el
+   * texto es más largo de lo normal, como en un escenario bloqueado o una
+   * opción de Ajustes. */
+  max-width: 100%;
+  white-space: normal;
 }
 .chip[aria-pressed='true'] {
   border-color: var(--ink);
@@ -248,5 +280,135 @@ footer {
   justify-content: center;
   padding: 20px;
   text-align: center;
+  color: var(--ink-2);
+}
+
+/* Escenario bloqueado (§16.1): la ficha se ve, pero atenuada, con el rango
+ * que hace falta en vez del nombre normal; no es seleccionable. */
+/* Sin opacity: el texto (qué rango hace falta) tiene que seguir leyéndose
+ * con contraste AA (§17.9); "bloqueado" ya lo dice el candado, el texto y
+ * el borde discontinuo, no hace falta atenuar el color. */
+.chip.locked {
+  border-style: dashed;
+  color: var(--ink-2);
+  cursor: not-allowed;
+  text-align: center;
+}
+
+/* Barra de rango (§16.1, portada y perfil). */
+.rank-bar {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--grid);
+  overflow: hidden;
+  margin-top: 8px;
+}
+.rank-bar i {
+  display: block;
+  height: 100%;
+  background: var(--pencil);
+}
+
+/* Ajustes y Perfil (§17.2, pantallas 6 y 7): mismo patrón de página suelta
+ * que .exhausted, con barra superior .gbar (game.css) en vez de .top. */
+.settings-view,
+.profile-view {
+  padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+}
+.pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+}
+.lbl {
+  font-weight: 700;
+  margin: 14px 0 4px;
+}
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  min-height: 44px;
+  cursor: pointer;
+}
+.toggle-row input {
+  width: 22px;
+  height: 22px;
+  flex: none;
+}
+
+/* Desplazamiento horizontal propio (§17.9: nunca el body) si la tabla no
+ * cabe a 360px; mismo patrón que .objtable-scroll en game.css. */
+.gridwrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.stats-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.stats-table th,
+.stats-table td {
+  border: 1px solid var(--grid);
+  padding: 6px 8px;
+  text-align: center;
+}
+.stats-table thead th {
+  font-size: 0.85rem;
+  color: var(--ink-2);
+  font-weight: 700;
+}
+.stats-table tbody th {
+  text-align: left;
+  font-weight: 700;
+}
+
+.arch-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.arch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 4px;
+  border-bottom: 1px dashed var(--grid);
+  min-height: 44px;
+}
+/* Sin opacity, por el mismo motivo que .chip.locked: el nombre del
+ * arquetipo tiene que seguir leyéndose (§17.9). "Todavía no visto" ya lo
+ * dice el 0 de al lado; aquí solo se distingue con cursiva. */
+.arch-row.dim .arch-name {
+  font-style: italic;
+  color: var(--ink-2);
+}
+.arch-name {
+  flex: 1;
+}
+.arch-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.help-rules {
+  padding-left: 1.4em;
+  margin: 0;
+}
+.help-rules li {
+  margin-bottom: 0.6em;
+}
+.help-glossary dt {
+  font-weight: 700;
+  margin-top: 0.8em;
+}
+.help-glossary dd {
+  margin: 0.2em 0 0;
   color: var(--ink-2);
 }

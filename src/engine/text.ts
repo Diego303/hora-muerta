@@ -13,6 +13,12 @@ export function timeLabel(t: Hour): string {
   return `${String(h).padStart(2, '0')}:00`;
 }
 
+/** m:ss, igual que el prototipo v1 (cronómetro §14.2, tiempo mediano §16.3). */
+export function formatElapsed(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
 export interface SuspectRef {
   name: string;
   color: string;

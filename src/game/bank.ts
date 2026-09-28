@@ -59,14 +59,13 @@ export function resetPlayed(bankVersion: string, groupIds: string[]): void {
 /**
  * El siguiente caso no jugado del banco, en el orden personal (§12.5): una
  * permutación fija (por semilla + versión + modo) de todo el grupo, filtrada
- * por mapa si la persona eligió uno. `null` si el grupo está agotado (para
- * ese filtro). El filtro por escenarios desbloqueados (§16.1) llega con la
- * progresión (M8): de momento se trata todo como desbloqueado.
+ * por mapa si la persona eligió uno y por escenarios desbloqueados (§16.1).
+ * `null` si el grupo está agotado (para ese filtro).
  */
-export function nextUnplayed(bank: BankFile, mapFilter: MapId | null): CaseDef | null {
+export function nextUnplayed(bank: BankFile, mapFilter: MapId | null, unlockedMaps: ReadonlySet<MapId>): CaseDef | null {
   const rng = rngFromSeed(`${getOrderSeed()}|${bank.version}|${bank.mode}`);
   const order = shuffle(rng, bank.cases);
   const played = getPlayed(bank.version);
-  const pool = mapFilter ? order.filter((c) => c.map === mapFilter) : order;
+  const pool = order.filter((c) => unlockedMaps.has(c.map) && (!mapFilter || c.map === mapFilter));
   return pool.find((c) => !played.has(c.id)) ?? null;
 }

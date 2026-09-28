@@ -5,7 +5,10 @@
 import { CHIP_COLORS } from '../engine/content/cast';
 import { MAPS } from '../engine/content/maps';
 import type { CaseMode, MapId } from '../engine/types';
+import { getDailyResultDates, todayKey } from '../game/modes';
+import { RANKS, computeDailyStreak, isMapUnlocked, rankProgress } from '../game/progression';
 import { loadSavedGame } from '../game/session';
+import { getProfile } from '../game/storage';
 import { startDemo } from './demo';
 
 const MODE_LABEL: Record<CaseMode, string> = {
@@ -21,9 +24,16 @@ export interface LandingOptions {
   onDaily: () => void;
   onResume: () => void;
   onExpediente: () => void;
+  onSettings: () => void;
+  onProfile: () => void;
+  onHelp: () => void;
 }
 
 export function renderLanding(root: HTMLElement, options: LandingOptions): () => void {
+  const profile = getProfile();
+  const { rank, next, starsToNext } = rankProgress(profile.stars);
+  const rankPct = next ? Math.round(((profile.stars - rank.stars) / (next.stars - rank.stars)) * 100) : 100;
+
   root.innerHTML = `
     <div class="wrap">
       <header class="top">
@@ -36,7 +46,9 @@ export function renderLanding(root: HTMLElement, options: LandingOptions): () =>
           Hora Muerta
         </div>
         <nav>
-          <a class="icon-btn" href="#como" style="text-decoration:none">Cómo se juega</a>
+          <button class="icon-btn" id="goHelp">Cómo se juega</button>
+          <button class="icon-btn" id="goProfile" aria-label="Perfil">☰</button>
+          <button class="icon-btn" id="goSettings" aria-label="Ajustes">⚙</button>
           <button class="icon-btn themeT" aria-label="Cambiar tema claro u oscuro">◐</button>
         </nav>
       </header>
@@ -51,6 +63,10 @@ export function renderLanding(root: HTMLElement, options: LandingOptions): () =>
             <button class="btn ghost" id="goExpediente">Expediente</button>
           </div>
           <p class="resume" id="resume" hidden><button class="link" id="resumeBtn"></button></p>
+          <button class="rank-chip" id="goProfile2" aria-label="Ver el perfil completo">
+            <b>${rank.name}</b><span>${profile.stars} ★${next ? ` · ${starsToNext} para ${next.name}` : ''}</span>
+            <span class="rank-bar"><i style="width:${rankPct}%"></i></span>
+          </button>
         </div>
         <figure class="demo" aria-label="Animación de un caso resuelto: los sospechosos se mueven por el plano hora a hora">
           <div class="clock" id="demoClock">21:00</div>
@@ -91,7 +107,7 @@ export function renderLanding(root: HTMLElement, options: LandingOptions): () =>
           <li><span class="lv">Inspector</span><span class="spec"><b>5 sospechosos, 3 horas.</b> Pistas cruzadas entre personas, salas y objetos. Unos 6 a 10 minutos.</span><button class="btn" data-lv="1">Empezar</button></li>
           <li><span class="lv">Comisario</span><span class="spec"><b>5 sospechosos, 4 horas.</b> Pistas indirectas y el mínimo imprescindible. Unos 10 a 18 minutos.</span><button class="btn" data-lv="2">Empezar</button></li>
         </ul>
-        <p class="stats" id="stats">Aún no has cerrado ningún caso.</p>
+        <p class="stats" id="stats"></p>
       </section>
 
       <footer>Casos generados y revisados con un solver lógico: cada uno pasa una comprobación de unicidad antes de servirse.</footer>
@@ -101,20 +117,37 @@ export function renderLanding(root: HTMLElement, options: LandingOptions): () =>
   let selectedMap: MapId | null = null;
   const mapSel = root.querySelector<HTMLDivElement>('#mapSel');
   if (mapSel) {
-    const mapOptions: { id: MapId | null; name: string }[] = [
-      { id: null, name: 'Cualquier lugar' },
-      ...MAPS.map((m) => ({ id: m.id, name: m.name })),
-    ];
-    for (const opt of mapOptions) {
-      const chip = document.createElement('button');
-      chip.className = 'chip';
-      chip.textContent = opt.name;
-      chip.setAttribute('aria-pressed', String(opt.id === null));
-      chip.addEventListener('click', () => {
-        selectedMap = opt.id;
-        mapSel.querySelectorAll<HTMLButtonElement>('.chip').forEach((c) => c.setAttribute('aria-pressed', String(c === chip)));
-      });
-      mapSel.appendChild(chip);
+    const chip = document.createElement('button');
+    chip.className = 'chip';
+    chip.textContent = 'Cualquier lugar';
+    chip.setAttribute('aria-pressed', 'true');
+    chip.addEventListener('click', () => {
+      selectedMap = null;
+      mapSel.querySelectorAll<HTMLButtonElement>('.chip').forEach((c) => c.setAttribute('aria-pressed', String(c === chip)));
+    });
+    mapSel.appendChild(chip);
+
+    // Escenarios bloqueados (§16.1): se ven, atenuados, con el rango que
+    // hace falta; no se pueden elegir. "Cualquier lugar" ya los excluye solo
+    // (nextUnplayed() filtra por escenario desbloqueado), así que no hace
+    // falta un mensaje aparte para eso.
+    for (const m of MAPS) {
+      const unlocked = isMapUnlocked(m.unlock, profile.stars);
+      const mapChip = document.createElement('button');
+      mapChip.className = unlocked ? 'chip' : 'chip locked';
+      if (unlocked) {
+        mapChip.textContent = m.name;
+        mapChip.setAttribute('aria-pressed', 'false');
+        mapChip.addEventListener('click', () => {
+          selectedMap = m.id;
+          mapSel.querySelectorAll<HTMLButtonElement>('.chip').forEach((c) => c.setAttribute('aria-pressed', String(c === mapChip)));
+        });
+      } else {
+        const rankName = RANKS.find((r) => r.id === m.unlock)?.name ?? m.unlock;
+        mapChip.textContent = `🔒 ${m.name} · rango ${rankName}`;
+        mapChip.disabled = true;
+      }
+      mapSel.appendChild(mapChip);
     }
   }
 
@@ -127,6 +160,22 @@ export function renderLanding(root: HTMLElement, options: LandingOptions): () =>
   });
   root.querySelector('#goDaily')?.addEventListener('click', () => options.onDaily());
   root.querySelector('#goExpediente')?.addEventListener('click', () => options.onExpediente());
+  root.querySelector('#goSettings')?.addEventListener('click', () => options.onSettings());
+  root.querySelector('#goHelp')?.addEventListener('click', () => options.onHelp());
+  root.querySelector('#goProfile')?.addEventListener('click', () => options.onProfile());
+  root.querySelector('#goProfile2')?.addEventListener('click', () => options.onProfile());
+
+  const statsEl = root.querySelector<HTMLParagraphElement>('#stats');
+  if (statsEl) {
+    const totalSolved = profile.solved.n + profile.solved.i + profile.solved.c;
+    if (totalSolved === 0) {
+      statsEl.textContent = 'Aún no has cerrado ningún caso.';
+    } else {
+      const streak = computeDailyStreak(getDailyResultDates(), todayKey());
+      const streakPhrase = streak.current > 0 ? ` Racha diaria: ${streak.current}.` : '';
+      statsEl.textContent = `${totalSolved} caso${totalSolved === 1 ? '' : 's'} resuelto${totalSolved === 1 ? '' : 's'}.${streakPhrase}`;
+    }
+  }
 
   const resumeEl = root.querySelector<HTMLParagraphElement>('#resume');
   const resumeBtn = root.querySelector<HTMLButtonElement>('#resumeBtn');

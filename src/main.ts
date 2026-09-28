@@ -1,4 +1,5 @@
 import type { DiffIndex } from './engine/clues';
+import { MAPS } from './engine/content/maps';
 import { rngFromSeed, shuffle } from './engine/rng';
 import type { BankFile, CaseDef, CaseMode, MapId, SeriesDef } from './engine/types';
 import { getOrderSeed, getPlayed, loadBank, markPlayed, modeForDiff, nextUnplayed } from './game/bank';
@@ -7,12 +8,19 @@ import { clearSeriesProgress, loadExpedientes, loadSeriesProgress, startSeries }
 import type { InfiniteSession } from './game/infinite';
 import { reproduceCase, startInfiniteSession } from './game/infinite';
 import { getDailyCase } from './game/modes';
+import { hasReachedRank, isMapUnlocked, recordSeriesCompletion } from './game/progression';
+import { computeStars } from './game/scoring';
 import { clearSavedGame, loadSavedGame } from './game/session';
+import { getProfile, migrateFromV1, saveProfile } from './game/storage';
 import { initTheme, wireThemeToggles } from './ui/a11y';
 import { renderBoard } from './ui/board';
 import { renderExhausted } from './ui/exhausted';
+import { renderHelp } from './ui/help';
 import { renderLanding } from './ui/landing';
+import { linkForCase } from './ui/links';
 import { renderLoading } from './ui/loading';
+import { renderProfile } from './ui/profile';
+import { renderSettings } from './ui/settings';
 import { toast } from './ui/toast';
 
 const appEl = document.getElementById('app');
@@ -20,6 +28,13 @@ if (!appEl) throw new Error('Falta el contenedor #app en index.astro.');
 const app: HTMLElement = appEl;
 
 let cleanup: (() => void) | null = null;
+
+/** Escenarios desbloqueados con el rango actual (§16.1); "sin repetir" nunca
+ * sirve un caso de un mapa bloqueado. */
+function unlockedMapIds(): Set<MapId> {
+  const stars = getProfile().stars;
+  return new Set(MAPS.filter((m) => isMapUnlocked(m.unlock, stars)).map((m) => m.id));
+}
 
 function showLanding(): void {
   cleanup?.();
@@ -36,8 +51,32 @@ function showLanding(): void {
     onExpediente: () => {
       void startExpediente();
     },
+    onSettings: showSettings,
+    onProfile: showProfile,
+    onHelp: showHelp,
   });
   wireThemeToggles();
+}
+
+function showHelp(): void {
+  cleanup?.();
+  cleanup = renderHelp(app, { onBack: showLanding });
+}
+
+function showSettings(): void {
+  cleanup?.();
+  cleanup = renderSettings(app, {
+    onBack: showLanding,
+    sepiaUnlocked: hasReachedRank(getProfile().stars, 'cabo'),
+  });
+}
+
+function showProfile(): void {
+  cleanup?.();
+  cleanup = renderProfile(app, getProfile(), {
+    onBack: showLanding,
+    linkFor: linkForCase,
+  });
 }
 
 function showBoard(caseData: CaseDef, bankVersion: string | null, mapFilter: MapId | null): void {
@@ -68,7 +107,7 @@ function showExhausted(bank: BankFile, mapFilter: MapId | null): void {
 async function startCasual(mode: Exclude<CaseMode, 'diario' | 'expediente'>, mapFilter: MapId | null): Promise<void> {
   try {
     const bank = await loadBank(mode);
-    const next = nextUnplayed(bank, mapFilter);
+    const next = nextUnplayed(bank, mapFilter, unlockedMapIds());
     if (!next) {
       showExhausted(bank, mapFilter);
       return;
@@ -196,6 +235,10 @@ async function advanceExpediente(series: SeriesDef): Promise<void> {
     const stars = progress?.starsSoFar ?? 0;
     markPlayed(expedienteVersionKey(progress?.version ?? ''), series.id);
     clearSeriesProgress();
+    // §16.3 "expedientes completados": la serie terminó, se resolvieran o no
+    // las 3 noches (progress.done también se marca al agotar el presupuesto
+    // compartido, expediente.ts#registerSeriesError).
+    if (progress) saveProfile(recordSeriesCompletion(getProfile()));
     toast(`Expediente cerrado: ${stars}/9 estrellas.`);
     showLanding();
     return;
@@ -309,5 +352,16 @@ function routeFromHash(): void {
   showLanding();
 }
 
+/** PWA (§19.1, §19.4): solo en producción, para no interferir con el recargado
+ * en caliente de `pnpm dev`. */
+function registerServiceWorker(): void {
+  if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
+    /* sin service worker el juego sigue funcionando, solo sin caché offline */
+  });
+}
+
 initTheme();
+migrateFromV1(computeStars);
+registerServiceWorker();
 routeFromHash();

@@ -3,8 +3,11 @@
 import { closingText, keyDeductionText, stepExplanation } from '../engine/text';
 import type { ClueTextContext } from '../engine/text';
 import type { CaseDef, MapDef } from '../engine/types';
+import { hasReachedRank } from '../game/progression';
 import { computeStars } from '../game/scoring';
 import type { GameStore } from '../game/store';
+import { getProfile } from '../game/storage';
+import { linkForCase } from './links';
 import type { SuspectView } from './plan';
 import { openReconstruction } from './reconstruct';
 import { toast } from './toast';
@@ -36,16 +39,12 @@ export function renderClosure(
 
   const errorsPhrase = state.errors ? `${state.errors} error${state.errors === 1 ? '' : 'es'}` : 'sin errores';
   const hintsPhrase = state.hintsUsed ? `, ${state.hintsUsed} pista${state.hintsUsed === 1 ? '' : 's'}` : '';
-  const shareText = solved ? `Hora Muerta: caso resuelto ${starsText(stars)}, ${errorsPhrase}${hintsPhrase}.` : 'Hora Muerta: caso archivado sin resolver.';
-  // #caso=<id> para casos del banco; #gen=<semilla>&n=<nivel>&m=<mapa> para
-  // modo infinito (§12.5), reconocible por el prefijo INF- que le pone
-  // draftToCaseDef(). El expediente no tiene enlace propio (§12.5 no define
-  // uno para series): se oculta el botón en vez de copiar un enlace roto.
-  const base = `${location.origin}${import.meta.env.BASE_URL}`;
-  const caseLink = caseData.id.startsWith('INF-')
-    ? `${base}#gen=${caseData.id.slice('INF-'.length)}&n=${caseData.diff}&m=${caseData.map}`
-    : `${base}#caso=${caseData.id}`;
-  const showLink = caseData.mode !== 'expediente';
+  // Insignia del rango Comisario en el resultado compartible (§16.1).
+  const badge = hasReachedRank(getProfile().stars, 'comisario') ? ' 🎖' : '';
+  const shareText = solved
+    ? `Hora Muerta: caso resuelto ${starsText(stars)}, ${errorsPhrase}${hintsPhrase}.${badge}`
+    : 'Hora Muerta: caso archivado sin resolver.';
+  const caseLink = linkForCase(caseData);
 
   root.innerHTML = `
     <div class="closure-sheet">
@@ -61,7 +60,7 @@ export function renderClosure(
       <div class="closure-actions">
         <button class="btn ghost" id="reconBtn">Ver la noche en el plano</button>
         <button class="btn ghost" id="shareBtn">Copiar resultado</button>
-        ${showLink ? '<button class="btn ghost" id="linkBtn">Copiar enlace a este caso</button>' : ''}
+        ${caseLink ? '<button class="btn ghost" id="linkBtn">Copiar enlace a este caso</button>' : ''}
         <button class="btn ghost" id="backBtn">Volver a la portada</button>
       </div>
     </div>
@@ -88,6 +87,7 @@ export function renderClosure(
       .catch(() => toast('No se pudo copiar.'));
   });
   root.querySelector('#linkBtn')?.addEventListener('click', () => {
+    if (!caseLink) return;
     navigator.clipboard
       ?.writeText(caseLink)
       .then(() => toast('Enlace copiado.'))
