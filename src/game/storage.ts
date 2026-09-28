@@ -178,3 +178,13 @@ export function migrateFromV1(computeStars: (errors: number, hints: number) => n
     // modo privado, cuota superada o hm:stats corrupto: se ignora sin migrar
   }
 }
+
+/** Tutorial guiado (game/tutorial.ts): solo para el texto de la portada
+ * ("primera vez"/"repetir"), no cuenta para nada más. */
+export function hasTutorialDone(): boolean {
+  return readJSON('tutorial', false);
+}
+
+export function markTutorialDone(): void {
+  writeJSON('tutorial', true);
+}

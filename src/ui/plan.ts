@@ -53,9 +53,12 @@ export interface PlanHandle {
   trail(prev: ((room: number, suspect: number) => MarkValue) | null, next: ((room: number, suspect: number) => MarkValue) | null, suspects: SuspectView[]): void;
   /** Ayuda de movimiento (§17.4): rayado suave en las salas dadas (a las que no se pudo llegar). */
   hatchRooms(rooms: number[]): void;
+  /** Rectángulo (coordenadas del viewBox) de una sala; para dibujar capas
+   * externas sobre el plano, como las guías del tutorial (ui/tutorial.ts). */
+  roomRect(room: number): RoomRect;
 }
 
-interface RoomRect {
+export interface RoomRect {
   x: number;
   y: number;
   w: number;
@@ -259,6 +262,9 @@ export function buildPlan(svg: SVGSVGElement, map: MapDef, opts: PlanOptions): P
         const rect = rects[r];
         svgEl('rect', { x: rect.x, y: rect.y, width: rect.w, height: rect.h, fill: `url(#${hatchPatternId})`, class: 'hatch' }, gHatch);
       }
+    },
+    roomRect(room) {
+      return rects[room];
     },
     tokens(roomsAt, suspects, show) {
       if (!show || !roomsAt) {
