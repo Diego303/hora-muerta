@@ -124,13 +124,13 @@ Cada una necesita tu confirmación. Donde hay recomendación, la aplico solo si 
 Cada fase se cierra con `pnpm typecheck`, `pnpm lint`, `pnpm test` (y `pnpm test:e2e` desde F1, aunque aquí no se ejecute), las casillas de este documento actualizadas y un commit `Fn: ...`.
 
 ### F0 · Router, modos visuales, planlite y menú — ✅ hecha
-- [x] `core/router.ts`: `showView(name, params)` con `home`, `game`, `fire` y `academy`; `enter` y `leave` (sin `render` separado, ver DECISIONES.md); hash `#incendio`, `#academia`, `#tutorial`. `#caso=` y `#gen=` se conservan como enlaces.
+- [x] `core/router.ts`: `showView(name, params)` con `home`, `game`, `fire` y `academy`; `enter`, `render` y `leave`, más `router.render()` para repintar la vista activa; hash `#incendio`, `#academia`, `#tutorial`. `#caso=` se lee (enlaces) pero no se escribe en partidas sueltas: desviación pendiente de tu confirmación (ver DECISIONES.md).
 - [x] `main.ts` migrado al router sin cambiar `#caso` ni `#gen`.
 - [x] `data-mode="fuego"` con tokens al final de `tokens.css`; contraste calculado (texto 13,9:1 o más, botón 6,1:1).
 - [x] Destello de 0,7 s al entrar y fundido de 0,3 s al salir; con `prefers-reduced-motion`, ninguno.
 - [x] `ui/planlite.ts` con la API de 1.3 (más `selected`) y pruebas del marcado.
 - [x] Menú según 1.4 (D5); "Calentar" en la cabecera.
-- [x] Prueba: al volver al menú, los temporizadores de la vista quedan parados (`vi.getTimerCount()`).
+- [x] Prueba: al volver al menú no queda ningún temporizador, intervalo ni `requestAnimationFrame` activo. Unitaria en `tests/core/router.test.ts` (con control que demuestra que detecta una fuga) y de extremo a extremo en `tests/e2e/router.spec.ts`, que mide en la página misma (esta última no se ejecuta aquí). Se corrigieron dos fugas reales (carga asíncrona de la portada y scroll del coach).
 - **Hecho cuando:** criterio 1.1 cumplido en pruebas (20 nuevas en verde). Falta tu comprobación en el móvil (360 px, portada, pantallas provisionales).
 
 ### F1 · Incendio, núcleo

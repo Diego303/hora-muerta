@@ -1,8 +1,9 @@
 // Router de vistas (docs/MODOS.md §1.1). Una sola función para cambiar de
-// vista: para la anterior (leave), fija el modo visual, arranca la nueva
-// (enter) y actualiza el hash. Las pantallas transitorias (ajustes, perfil,
-// cargas...) se montan con replaceScreen: no cambian ni la vista ni el hash.
-// No toca el DOM: el modo y el hash llegan inyectados, así se prueba en Node.
+// vista: para lo que hay en pantalla (leave), fija el modo visual, monta la
+// nueva (enter), la pinta (render) y actualiza el hash. Las pantallas
+// transitorias (ajustes, perfil, cargas...) se montan con replaceScreen: sustituyen
+// el contenido sin cambiar de vista ni de hash. No toca el DOM: el modo y el
+// hash llegan inyectados, así se prueba en Node.
 
 export type ViewName = 'home' | 'game' | 'fire' | 'academy';
 export type VisualMode = 'fuego' | null;
@@ -10,8 +11,12 @@ export type Leave = () => void;
 
 export interface ViewDef<P> {
   mode: VisualMode;
-  /** Pinta la vista y arranca lo que necesite. Devuelve cómo pararla. */
-  enter(params: P): Leave;
+  /** Arranca lo que la vista necesita (temporizadores, escuchas, suscripciones). */
+  enter(params: P): void;
+  /** Pinta o repinta lo que muestra la vista. Lo llama el router al entrar y con render(). */
+  render(params: P): void;
+  /** Para todo lo que enter arrancó. Se llama como mucho una vez por cada enter. */
+  leave(): void;
   /** Fragmento de URL (sin #) que representa esta vista, o null si no tiene. */
   hash(params: P): string | null;
 }
@@ -27,55 +32,68 @@ type ShowArgs<P extends Record<ViewName, unknown>, N extends ViewName> = P[N] ex
 
 export interface Router<P extends Record<ViewName, unknown>> {
   showView<N extends ViewName>(name: N, ...args: ShowArgs<P, N>): void;
+  /** Repinta la vista activa con sus mismos parámetros. No hace nada si hay una pantalla transitoria. */
+  render(): void;
+  /** Sustituye lo que hay en pantalla por una pantalla transitoria. */
   replaceScreen(mount: () => Leave): void;
+  /** Vista activa, o null si lo que hay en pantalla es una pantalla transitoria. */
   readonly current: ViewName | null;
 }
 
 const noop: Leave = () => undefined;
 
 export function createRouter<P extends Record<ViewName, unknown>>(views: ViewDefs<P>, env: RouterEnv): Router<P> {
-  let current: ViewName | null = null;
+  let currentName: ViewName | null = null;
+  let repaint: Leave | null = null;
+  let stopScreen: Leave = noop;
   let mode: VisualMode = null;
-  let leave: Leave = noop;
-  // Cada navegación recibe un número. Si durante enter() se navega otra vez,
-  // la vista que acaba de montarse ya no es la activa: se para en vez de dejarla huérfana.
+  // Cada navegación recibe un número. Si durante enter() o render() se navega
+  // otra vez, la vista que se estaba montando ya no es la activa: se para.
   let generation = 0;
 
-  function stopCurrent(): void {
-    const stop = leave;
-    leave = noop;
+  function clearScreen(): void {
+    const stop = stopScreen;
+    stopScreen = noop;
+    repaint = null;
+    currentName = null;
     stop();
   }
 
   return {
     get current() {
-      return current;
+      return currentName;
     },
     showView(name, ...args) {
       const def = views[name];
       const params = args[0] as P[typeof name];
-      stopCurrent();
+      clearScreen();
       env.applyMode(def.mode, mode);
       mode = def.mode;
-      current = name;
       const token = ++generation;
-      const stop = def.enter(params);
+      def.enter(params);
       if (token !== generation) {
-        stop();
+        def.leave();
         return;
       }
-      leave = stop;
+      currentName = name;
+      repaint = () => def.render(params);
+      stopScreen = () => def.leave();
+      def.render(params);
+      if (token !== generation) return;
       env.writeHash(def.hash(params));
     },
+    render() {
+      repaint?.();
+    },
     replaceScreen(mount) {
-      stopCurrent();
+      clearScreen();
       const token = ++generation;
       const stop = mount();
       if (token !== generation) {
         stop();
         return;
       }
-      leave = stop;
+      stopScreen = stop;
     },
   };
 }

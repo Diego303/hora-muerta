@@ -525,6 +525,12 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   const tickTimer = setInterval(() => store.tick(), 1000);
 
   let expandCleanup: (() => void) | null = null;
+  let closureCleanup: (() => void) | null = null;
+  function stopClosure(): void {
+    const stop = closureCleanup;
+    closureCleanup = null;
+    stop?.();
+  }
   function openExpandedPlan(): void {
     const overlay = document.createElement('div');
     overlay.className = 'plan-overlay';
@@ -587,6 +593,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     clearInterval(tickTimer);
     chalk.destroy();
     expandCleanup?.();
+    stopClosure();
   }
 
   // Expediente (§13): el presupuesto de errores es de las 3 noches juntas, no
@@ -651,14 +658,13 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
       const progress = loadSeriesProgress();
       if (progress) completeNight(progress, computeStars(finalState.errors, finalState.hintsUsed), EXPEDIENTE_NIGHTS);
     }
-    let closureCleanup: (() => void) | null = null;
     closureCleanup = renderClosure(root, map, caseData, textCtx, suspects, store, {
       onNext: () => {
-        closureCleanup?.();
+        stopClosure();
         options.onNextCase(caseData);
       },
       onBackToLanding: () => {
-        closureCleanup?.();
+        stopClosure();
         options.onExit();
       },
     });

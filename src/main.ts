@@ -1,4 +1,5 @@
 import { createRouter, parseRoute } from './core/router';
+import type { ViewDef, VisualMode } from './core/router';
 import { applyVisualMode } from './core/visualmode';
 import type { DiffIndex } from './engine/clues';
 import { MAPS } from './engine/content/maps';
@@ -60,20 +61,50 @@ function writeHash(hash: string | null): void {
   }
 }
 
+/** Vista que monta una pantalla completa: lo que devuelve mount es cómo pararla.
+ * Se pinta sola al montarse, así que render no hace nada. */
+function screenView<P>(mount: (params: P) => () => void, mode: VisualMode, hash: (params: P) => string | null): ViewDef<P> {
+  let stop: (() => void) | null = null;
+  return {
+    mode,
+    hash,
+    enter: (params) => {
+      stop = mount(params);
+    },
+    render: () => undefined,
+    leave: () => {
+      const s = stop;
+      stop = null;
+      s?.();
+    },
+  };
+}
+
+/** Vista provisional: enter no arranca nada, render pinta el texto y leave quita sus escuchas. */
+function pendingView(title: string, text: string, mode: VisualMode, hash: string): ViewDef<undefined> {
+  let stop: (() => void) | null = null;
+  return {
+    mode,
+    hash: () => hash,
+    enter: () => undefined,
+    render: () => {
+      stop?.();
+      stop = renderPendingView(app, { title, text, onBack: showLanding });
+    },
+    leave: () => {
+      const s = stop;
+      stop = null;
+      s?.();
+    },
+  };
+}
+
 const router = createRouter<AppRoutes>(
   {
-    home: { mode: null, enter: () => mountLanding(), hash: () => null },
-    game: { mode: null, enter: (route) => route.mount(), hash: (route) => route.hash },
-    fire: {
-      mode: 'fuego',
-      enter: () => renderPendingView(app, { title: 'Modo Incendio', text: 'Todavía en construcción.', onBack: showLanding }),
-      hash: () => 'incendio',
-    },
-    academy: {
-      mode: null,
-      enter: () => renderPendingView(app, { title: 'Calentamiento', text: 'Todavía en construcción.', onBack: showLanding }),
-      hash: () => 'academia',
-    },
+    home: screenView(() => mountLanding(), null, () => null),
+    game: screenView((route: GameRoute) => route.mount(), null, (route) => route.hash),
+    fire: pendingView('Modo Incendio', 'Todavía en construcción.', 'fuego', 'incendio'),
+    academy: pendingView('Calentamiento', 'Todavía en construcción.', null, 'academia'),
   },
   {
     applyMode: (mode, previous) => applyVisualMode(mode, previous, prefersReducedMotion()),

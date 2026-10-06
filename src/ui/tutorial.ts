@@ -45,6 +45,7 @@ export function startTutorialCoach(root: HTMLElement, store: GameStore, plan: Pl
   let doneAt: number | null = null;
   let min = false;
   let lastTargetKey: string | null = null;
+  let scrollTimer: ReturnType<typeof setTimeout> | null = null;
 
   function currentStep(): TutorialStep {
     return TUTORIAL_STEPS[i];
@@ -160,7 +161,10 @@ export function startTutorialCoach(root: HTMLElement, store: GameStore, plan: Pl
     if (sels.length && targetKey !== lastTargetKey) {
       lastTargetKey = targetKey;
       const el = root.querySelector(sels[0]) ?? document.querySelector(sels[0]);
-      if (el) setTimeout(() => el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 60);
+      if (el) {
+        if (scrollTimer) clearTimeout(scrollTimer);
+        scrollTimer = setTimeout(() => el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 60);
+      }
     }
   }
 
@@ -204,6 +208,7 @@ export function startTutorialCoach(root: HTMLElement, store: GameStore, plan: Pl
   function cleanup(): void {
     unsubscribe();
     clearInterval(autoAdvanceTimer);
+    if (scrollTimer) clearTimeout(scrollTimer);
     window.removeEventListener('resize', onResize);
     document.body.classList.remove('tut-on');
     root.querySelectorAll('.tut-target').forEach((n) => n.classList.remove('tut-target'));

@@ -230,6 +230,22 @@ Plan completo en `docs/PLAN_MODOS.md`. Esta sección recoge lo decidido al imple
 
 - **Pendiente de comprobación en el móvil:** la cabecera a 360 px, la fila principal de la portada y las dos pantallas provisionales. Playwright no corre en este entorno.
 
+### F0, segunda vuelta: contrato enter/render/leave y prueba de temporizadores
+
+Se pidió el contrato completo de MODOS 1.1 y una prueba que compruebe que al volver al menú no queda nada activo. Cambios:
+
+- **Contrato de vista:** `enter(params)` monta y arranca lo que necesita; `render(params)` pinta o repinta; `leave()` para todo lo que `enter` arrancó. `router.render()` repinta la vista activa con sus mismos parámetros, sin pararla. Si durante `enter` o `render` se navega otra vez, la vista que se estaba montando se para una sola vez.
+- **Vistas de la portada y del tablero:** `screenView` envuelve las pantallas que ya se pintan completas al montarse (portada y partida). Su `render` no hace nada: la partida tiene su propio estado en el store y repintarla desde fuera la reiniciaría. `pendingView` (Incendio y Calentamiento provisionales) usa los tres pasos de verdad: no arranca nada en `enter`, pinta en `render` y quita sus escuchas en `leave`.
+- **Auditoría de temporizadores en `src/`:** no hay ningún `requestAnimationFrame` en el código de la app. De los temporizadores, dos fugas reales estaban cerradas solo por suerte:
+  - **Portada (plano de casos):** la carga de los bancos es asíncrona y el intervalo de los pines se creaba después del `await`. Si se salía de la portada antes de que terminara la carga, el intervalo quedaba vivo. Corregido con una bandera `disposed` que se comprueba tras cada `await`.
+  - **Tutorial (coach):** el `setTimeout` que desplaza el mapa al paso siguiente no se cancelaba al salir. Ahora se guarda y se cancela en su `cleanup`.
+  - **Cierre con reconstrucción:** el overlay de "Ver la noche" tenía su propio intervalo y solo se paraba al cerrarlo desde el propio cierre. Ahora `renderBoard` para el cierre al salir, así que el router también lo para.
+  - **Quedan fuera a propósito:** los avisos (`toast`) se borran solos a los 1,8 s. Son notificaciones, no una vista: si se parasen al salir, el aviso "Ese caso ya no está disponible" desaparecería en el mismo instante en que se muestra.
+- **Pruebas:**
+  - Unitarias (`tests/core/router.test.ts`): la vista con temporizador, intervalo y fotograma queda exactamente como la portada sola tras recorrer todas las vistas; una pantalla transitoria con intervalo y fotograma también queda parada; y un control que demuestra que la prueba detecta una vista que no para lo que arranca. Los fotogramas se cuentan con un sustituto de `requestAnimationFrame` (`tests/support/frameLedger.ts`), porque Node no lo tiene.
+  - De extremo a extremo (`tests/e2e/router.spec.ts`): mide en la propia página los temporizadores, intervalos y fotogramas (un registro inyectado antes de cargar la app), recorre Incendio, Calentamiento, el tutorial, un caso suelto, Ajustes, Perfil y Cómo se juega, y comprueba que al volver al menú coincide con la medida de la portada sola. **No se ejecuta en este entorno.**
+- **Desviación que hay que confirmar: `#caso=` no se escribe en las partidas sueltas.** MODOS 1.1 dice que el router actualiza el hash con `#caso=ID`. Escribirlo al abrir cada caso rompe el flujo "Seguir tu caso sin terminar": al recargar, el enlace abre la partida directamente y el botón de la portada que tiene que retomarla no aparece (lo comprueba `tests/e2e/session.spec.ts`). Por eso el router lee `#caso=` (enlaces de siempre) pero no lo escribe. Si quieres que se escriba, hay que cambiar también ese flujo de reanudación; te lo pregunto antes de tocarlo.
+
 ## Contenido y diseño
 
 - **Corrección de ruta bajo `base: "/hora-muerta/"`.** `Layout.astro` (heredado de la plantilla de Astro) enlazaba `/favicon.svg` y `/favicon.ico` con ruta absoluta; bajo GitHub Pages con `base: "/hora-muerta/"` esos enlaces romperían. Se corrige usando `import.meta.env.BASE_URL` en ambos `<link>`.
