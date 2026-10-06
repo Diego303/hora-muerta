@@ -1,3 +1,5 @@
+import { createRouter, parseRoute } from './core/router';
+import { applyVisualMode } from './core/visualmode';
 import type { DiffIndex } from './engine/clues';
 import { MAPS } from './engine/content/maps';
 import { rngFromSeed, shuffle } from './engine/rng';
@@ -13,7 +15,7 @@ import { computeStars } from './game/scoring';
 import { clearSavedGame, loadSavedGame } from './game/session';
 import { getProfile, migrateFromV1, saveProfile } from './game/storage';
 import { TUTORIAL_CASE } from './game/tutorial';
-import { initTheme, wireThemeToggles } from './ui/a11y';
+import { initTheme, prefersReducedMotion, wireThemeToggles } from './ui/a11y';
 import { renderBoard } from './ui/board';
 import { renderCaseList } from './ui/caselist';
 import { renderExhausted } from './ui/exhausted';
@@ -21,6 +23,7 @@ import { renderHelp } from './ui/help';
 import { renderLanding } from './ui/landing';
 import { linkForCase } from './ui/links';
 import { renderLoading } from './ui/loading';
+import { renderPendingView } from './ui/pending';
 import { renderProfile } from './ui/profile';
 import { renderSettings } from './ui/settings';
 import { toast } from './ui/toast';
@@ -30,7 +33,53 @@ const appEl = document.getElementById('app');
 if (!appEl) throw new Error('Falta el contenedor #app en index.astro.');
 const app: HTMLElement = appEl;
 
-let cleanup: (() => void) | null = null;
+/** Una partida del tablero: el hash que la representa (o null) y cómo montarla. */
+interface GameRoute {
+  hash: string | null;
+  mount: () => () => void;
+}
+
+interface AppRoutes {
+  home: undefined;
+  game: GameRoute;
+  fire: undefined;
+  academy: undefined;
+}
+
+const OWN_HASHES = ['#incendio', '#academia', '#tutorial'];
+
+function writeHash(hash: string | null): void {
+  // Solo se borra el hash que es nuestro: un #caso=... de enlace se conserva.
+  if (hash === null && !OWN_HASHES.includes(location.hash)) return;
+  const next = hash === null ? '' : `#${hash}`;
+  if (location.hash === next) return;
+  try {
+    history.replaceState(history.state, '', `${location.pathname}${location.search}${next}`);
+  } catch {
+    // sin acceso al historial: la URL se queda como está
+  }
+}
+
+const router = createRouter<AppRoutes>(
+  {
+    home: { mode: null, enter: () => mountLanding(), hash: () => null },
+    game: { mode: null, enter: (route) => route.mount(), hash: (route) => route.hash },
+    fire: {
+      mode: 'fuego',
+      enter: () => renderPendingView(app, { title: 'Modo Incendio', text: 'Todavía en construcción.', onBack: showLanding }),
+      hash: () => 'incendio',
+    },
+    academy: {
+      mode: null,
+      enter: () => renderPendingView(app, { title: 'Calentamiento', text: 'Todavía en construcción.', onBack: showLanding }),
+      hash: () => 'academia',
+    },
+  },
+  {
+    applyMode: (mode, previous) => applyVisualMode(mode, previous, prefersReducedMotion()),
+    writeHash,
+  },
+);
 
 /** Escenarios desbloqueados con el rango actual (§16.1); "sin repetir" nunca
  * sirve un caso de un mapa bloqueado. */
@@ -39,9 +88,8 @@ function unlockedMapIds(): Set<MapId> {
   return new Set(MAPS.filter((m) => isMapUnlocked(m.unlock, stars)).map((m) => m.id));
 }
 
-function showLanding(): void {
-  cleanup?.();
-  cleanup = renderLanding(app, {
+function mountLanding(): () => void {
+  const leave = renderLanding(app, {
     onStart: (diff, mapFilter) => {
       void startCasual(modeForDiff(diff), mapFilter);
     },
@@ -58,15 +106,21 @@ function showLanding(): void {
     onProfile: showProfile,
     onHelp: showHelp,
     onTutorial: showTutorial,
+    onAcademy: () => router.showView('academy'),
+    onFire: () => router.showView('fire'),
     onPlayCase: (caseData, bankVersion) => showBoard(caseData, bankVersion, null),
     onShowCaseList: showCaseList,
   });
   wireThemeToggles();
+  return leave;
+}
+
+function showLanding(): void {
+  router.showView('home');
 }
 
 function showHelp(): void {
-  cleanup?.();
-  cleanup = renderHelp(app, { onBack: showLanding });
+  router.replaceScreen(() => renderHelp(app, { onBack: showLanding }));
 }
 
 /** Tutorial guiado: un caso de prácticas fijo (game/tutorial.ts) con un
@@ -74,14 +128,17 @@ function showHelp(): void {
  * las estadísticas ni se guarda como caso en curso (board.ts ya lo trata
  * aparte por el id TUT-01). */
 function showTutorial(): void {
-  cleanup?.();
+  router.showView('game', { hash: 'tutorial', mount: mountTutorialBoard });
+}
+
+function mountTutorialBoard(): () => void {
   let stopCoach: (() => void) | null = null;
   const exitTutorial = (): void => {
     stopCoach?.();
     stopCoach = null;
     showLanding();
   };
-  cleanup = renderBoard(app, TUTORIAL_CASE, {
+  const leaveBoard = renderBoard(app, TUTORIAL_CASE, {
     onExit: exitTutorial,
     onNextCase: () => exitTutorial(),
     bankVersion: null,
@@ -89,57 +146,69 @@ function showTutorial(): void {
       stopCoach = startTutorialCoach(app, store, plan, { onExit: exitTutorial });
     },
   });
+  return () => {
+    stopCoach?.();
+    stopCoach = null;
+    leaveBoard();
+  };
 }
 
 /** Lista completa de casos, filtrable (§ nueva mejora): la alternativa de
  * "elegir con calma" al plano plegable, que solo enseña unos pocos a la vez. */
 function showCaseList(): void {
-  cleanup?.();
-  cleanup = renderCaseList(app, {
-    onBack: showLanding,
-    onPlay: (caseData, bankVersion) => showBoard(caseData, bankVersion, null),
-  });
+  router.replaceScreen(() =>
+    renderCaseList(app, {
+      onBack: showLanding,
+      onPlay: (caseData, bankVersion) => showBoard(caseData, bankVersion, null),
+    }),
+  );
 }
 
 function showSettings(): void {
-  cleanup?.();
-  cleanup = renderSettings(app, {
-    onBack: showLanding,
-    sepiaUnlocked: hasReachedRank(getProfile().stars, 'cabo'),
-  });
+  router.replaceScreen(() =>
+    renderSettings(app, {
+      onBack: showLanding,
+      sepiaUnlocked: hasReachedRank(getProfile().stars, 'cabo'),
+    }),
+  );
 }
 
 function showProfile(): void {
-  cleanup?.();
-  cleanup = renderProfile(app, getProfile(), {
-    onBack: showLanding,
-    linkFor: linkForCase,
-  });
+  router.replaceScreen(() =>
+    renderProfile(app, getProfile(), {
+      onBack: showLanding,
+      linkFor: linkForCase,
+    }),
+  );
 }
 
 function showBoard(caseData: CaseDef, bankVersion: string | null, mapFilter: MapId | null): void {
-  cleanup?.();
-  cleanup = renderBoard(app, caseData, {
-    onExit: showLanding,
-    onNextCase: (finished) => {
-      void nextCase(finished, mapFilter);
-    },
-    bankVersion,
+  router.showView('game', {
+    hash: null,
+    mount: () =>
+      renderBoard(app, caseData, {
+        onExit: showLanding,
+        onNextCase: (finished) => {
+          void nextCase(finished, mapFilter);
+        },
+        bankVersion,
+      }),
   });
 }
 
 function showExhausted(bank: BankFile, mapFilter: MapId | null): void {
-  cleanup?.();
-  renderExhausted(app, bank, mapFilter, {
-    onRestart: () => {
-      void startCasual(bank.mode as Exclude<CaseMode, 'diario' | 'expediente'>, mapFilter);
-    },
-    onInfinite: () => {
-      showInfinite(bank.cases[0].diff, mapFilter);
-    },
-    onBackToLanding: showLanding,
+  router.replaceScreen(() => {
+    renderExhausted(app, bank, mapFilter, {
+      onRestart: () => {
+        void startCasual(bank.mode as Exclude<CaseMode, 'diario' | 'expediente'>, mapFilter);
+      },
+      onInfinite: () => {
+        showInfinite(bank.cases[0].diff, mapFilter);
+      },
+      onBackToLanding: showLanding,
+    });
+    return () => undefined;
   });
-  cleanup = null;
 }
 
 async function startCasual(mode: Exclude<CaseMode, 'diario' | 'expediente'>, mapFilter: MapId | null): Promise<void> {
@@ -257,13 +326,16 @@ async function resumeExpediente(): Promise<void> {
 }
 
 function showExpedienteNight(series: SeriesDef, progress: SeriesProgress): void {
-  cleanup?.();
-  cleanup = renderBoard(app, series.cases[progress.index], {
-    onExit: showLanding,
-    onNextCase: () => {
-      void advanceExpediente(series);
-    },
-    bankVersion: null,
+  router.showView('game', {
+    hash: null,
+    mount: () =>
+      renderBoard(app, series.cases[progress.index], {
+        onExit: showLanding,
+        onNextCase: () => {
+          void advanceExpediente(series);
+        },
+        bankVersion: null,
+      }),
   });
 }
 
@@ -288,8 +360,7 @@ async function advanceExpediente(series: SeriesDef): Promise<void> {
  * caso; el siguiente se pregenera mientras se juega el actual. */
 function showInfinite(diff: DiffIndex, mapFilter: MapId | null): void {
   const session = startInfiniteSession(diff, mapFilter);
-  cleanup?.();
-  cleanup = renderLoading(app, 'Generando un caso nuevo…');
+  router.replaceScreen(() => renderLoading(app, 'Generando un caso nuevo…'));
   void session.next().then((caseData) => {
     if (!caseData) {
       toast('No se ha podido generar un caso a tiempo. Inténtalo de nuevo.');
@@ -303,22 +374,24 @@ function showInfinite(diff: DiffIndex, mapFilter: MapId | null): void {
 
 function showInfiniteBoard(caseData: CaseDef, session: InfiniteSession, diff: DiffIndex, mapFilter: MapId | null): void {
   session.pregenerate();
-  cleanup?.();
-  cleanup = renderBoard(app, caseData, {
-    onExit: () => {
-      session.destroy();
-      showLanding();
-    },
-    onNextCase: () => {
-      void nextInfiniteCase(session, diff, mapFilter);
-    },
-    bankVersion: null,
+  router.showView('game', {
+    hash: null,
+    mount: () =>
+      renderBoard(app, caseData, {
+        onExit: () => {
+          session.destroy();
+          showLanding();
+        },
+        onNextCase: () => {
+          void nextInfiniteCase(session, diff, mapFilter);
+        },
+        bankVersion: null,
+      }),
   });
 }
 
 async function nextInfiniteCase(session: InfiniteSession, diff: DiffIndex, mapFilter: MapId | null): Promise<void> {
-  cleanup?.();
-  cleanup = renderLoading(app, 'Generando el siguiente caso…');
+  router.replaceScreen(() => renderLoading(app, 'Generando el siguiente caso…'));
   const caseData = await session.next();
   if (!caseData) {
     toast('No se ha podido generar el siguiente caso a tiempo.');
@@ -356,38 +429,46 @@ async function openLinkedCase(id: string): Promise<void> {
 }
 
 async function openGenLink(seed: string, diff: DiffIndex, mapId: MapId | undefined): Promise<void> {
-  cleanup?.();
-  cleanup = renderLoading(app, 'Generando ese caso…');
+  router.replaceScreen(() => renderLoading(app, 'Generando ese caso…'));
   const caseData = await reproduceCase(seed, diff, mapId);
   if (!caseData) {
     toast('No se ha podido reproducir ese caso.');
     showLanding();
     return;
   }
-  cleanup?.();
-  cleanup = renderBoard(app, caseData, {
-    onExit: showLanding,
-    onNextCase: () => showLanding(),
-    bankVersion: null,
+  router.showView('game', {
+    hash: null,
+    mount: () =>
+      renderBoard(app, caseData, {
+        onExit: showLanding,
+        onNextCase: () => showLanding(),
+        bankVersion: null,
+      }),
   });
 }
 
 function routeFromHash(): void {
-  const params = new URLSearchParams(location.hash.slice(1));
-  const caso = params.get('caso');
-  if (caso) {
-    void openLinkedCase(caso);
-    return;
+  const route = parseRoute(location.hash);
+  switch (route.kind) {
+    case 'fire':
+      router.showView('fire');
+      return;
+    case 'academy':
+      router.showView('academy');
+      return;
+    case 'tutorial':
+      showTutorial();
+      return;
+    case 'caso':
+      void openLinkedCase(route.id);
+      return;
+    case 'gen':
+      void openGenLink(route.seed, route.diff, route.map === null ? undefined : (route.map as MapId));
+      return;
+    case 'home':
+      showLanding();
+      return;
   }
-  const gen = params.get('gen');
-  if (gen) {
-    const diffRaw = Number(params.get('n'));
-    const diff: DiffIndex = diffRaw === 1 || diffRaw === 2 ? diffRaw : 0;
-    const mapId = params.get('m') as MapId | null;
-    void openGenLink(gen, diff, mapId ?? undefined);
-    return;
-  }
-  showLanding();
 }
 
 /** PWA (§19.1, §19.4): solo en producción, para no interferir con el recargado

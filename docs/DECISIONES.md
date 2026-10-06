@@ -196,6 +196,40 @@ Dos hallazgos a petición del usuario, ninguno visto en un navegador real (Playw
 - **Bug real en el generador: el presupuesto de lectura de Novato (§6.3, 600 caracteres) se comprobaba ANTES de añadir la pista de cortesía, no después.** `src/engine/generate.ts` calculaba `readLength` sobre `clues` y luego, solo para Novato (`courtesyClues:1`), añadía una pista más sin volver a comprobar la longitud — así que la pista de cortesía podía colar un caso por encima del tope real. `pnpm bank:validate` (que re-verifica CADA caso publicado contra el solver exacto, el humano y todas las comprobaciones de forma, no solo confía en lo guardado) lo detectó: 3 casos de Novato (N-075, N-084, N-125) superaban el tope. Arreglo: la comprobación de longitud se mueve a después de añadir la pista de cortesía. Los 3 casos afectados se regeneraron (los otros 167 de Novato y el resto de niveles no cambian: se verificó comparando firma a firma contra la versión anterior). De paso se exportó `generateGroup()` de `scripts/build-bank.ts` (con una guarda `if (fileURLToPath(import.meta.url) === process.argv[1]) main();` para que importarlo no dispare una generación completa) para poder regenerar un único grupo sin relanzar el banco entero — útil para este arreglo y para el futuro. `public/cases/manifest.json` también tenía el recuento de Inspector desactualizado (160 en vez de los 164 reales del archivo); corregido de paso, aunque no lo lee ningún código en tiempo de ejecución.
 - **Confirmado por auditoría completa: `pnpm bank:validate` da "todo correcto" sobre los 389 casos publicados** (170 Novato + 164 Inspector + 55 Diario). Comisario y Expediente siguen vacíos (0 casos) en el banco publicado — hueco ya documentado más arriba, pendiente de una generación completa con R6_HYPOTHESIS que no se ha lanzado todavía (podría tardar bastante, ver la entrada de "Corrección tras la primera ejecución real").
 
+## Modos Incendio y Calentamiento: F0 (infraestructura)
+
+Plan completo en `docs/PLAN_MODOS.md`. Esta sección recoge lo decidido al implementar F0.
+
+- **Decisiones del usuario sobre el plan:**
+  - **D1, solubilidad con pistas quemadas:** el caso puede volverse irresoluble cuando arden pistas. La presión del tiempo y la posibilidad de perder son parte del juego, así que no se exige la garantía fuerte de solubilidad con cualquier pareja de pistas tempranas. Se mantienen las garantías de MODOS 2.5 tal como están y el principio de MODOS 0.3: el incendio quita información de forma predecible y evitable. **Tensión a vigilar:** CLAUDE.md dice que el incendio "nunca puede exigir adivinar". La lectura que se aplica es que no hace falta adivinar mientras se razona a tiempo; si se acaba el tiempo con la información quemada, se pierde. Queda pendiente confirmar la redacción de CLAUDE.md, que no se cambia sin preguntar.
+  - **D2:** "Casa de prácticas" es un mapa solo de ejercicios (`src/content/practice.ts`), fuera del banco de casos.
+  - **D4:** 90 remates, 30 por nivel. Corrige la cifra de MODOS 3.8: con 4 técnicas × 3 niveles × 30 el total es 360, y los remates son 90, no 60.
+  - D5 y D6 se aplican en F0 (ver abajo). El resto (D3, D7 a D13) se aplica en su fase.
+
+- **Router (`core/router.ts`):** `createRouter` con `showView(name, params)` y `replaceScreen(mount)`.
+  - Cuatro vistas: `home`, `game`, `fire` y `academy`. La vista `game` recibe un `GameRoute { hash, mount }`: la partida se monta con las mismas funciones de siempre (`renderBoard` y compañía) y el router solo decide cuándo se para. Así no hay que reescribir los flujos de caso, expediente, modo infinito y enlaces.
+  - `replaceScreen` sustituye el contenido de la vista activa (ajustes, perfil, cargas) sin cambiar modo ni hash. Para la vista antes de montar la pantalla; si no, el demo de la portada seguiría corriendo debajo de Ajustes.
+  - Si durante `enter` se navega otra vez, la vista que se estaba montando se para en vez de quedar huérfana (un contador de navegaciones lo detecta).
+  - **Desviación:** no hay `render()` separado. Cada pantalla se pinta en su `enter` y se repinta por dentro. Separarlo ahora sería código muerto; se añadirá si una fase lo necesita.
+  - **Hash:** el router escribe `#incendio`, `#academia` y `#tutorial`, y `home` borra solo esos. Los enlaces `#caso=` y `#gen=` se conservan tal cual. Escribir `#caso=` en cada partida rompería el modo infinito y el expediente al recargar, porque sus ids no están en ningún banco.
+  - `#tutorial` se puede abrir ya por enlace directo; antes solo por botón.
+
+- **Modo visual:** `data-mode="fuego"` en `<html>`. La paleta va al final de `tokens.css` porque tiene la misma especificidad (0,2,0) que los temas y tiene que ganarles. Contraste calculado en WCAG: texto claro 13,9:1 o más sobre cualquier superficie; texto oscuro sobre brasa 6,1:1; bordes de control 3:1 o más. **Ajuste:** `--grid` pasa de `#4a2c20` a `#94634b`, porque con la primera el borde de los chips quedaba en 1,5:1.
+
+- **Destello (`core/visualmode.ts`):** un único elemento que se borra al acabar su animación, sin temporizador. Con movimiento reducido no hay destello. La paleta cambia al empezar y el destello se superpone; no se sincroniza con la mitad de la animación, para no depender de un temporizador.
+
+- **Miniplano (`ui/planlite.ts`):** la API de 1.3, más `selected`, que hace falta para mostrar qué salas ha elegido quien responde. El marcado es una función pura comprobable en Node. El tablero (`ui/plan.ts`) y el tutorial no se tocan (D6); planlite se usará en calentamiento y en la vista previa del incendio.
+
+- **Portada (D5):** los cuatro botones principales siguen el orden de 1.4 ("Abrir el plano de casos" es un ancla a `#plano-casos`). Se conservan "Elegir nivel", "Expediente", ☰ Perfil y ⚙ Ajustes, porque ya funcionan. En móvil, "Jugar el caso del día" ocupa una fila entera.
+
+- **Cabecera:** `.top` y `nav` pueden partirse en dos filas en vez de desbordar la anchura. Con seis botones no hay forma fiable de medir el ancho sin un navegador, así que se evita el desbordamiento en lugar de calcularlo.
+
+- **Pantallas provisionales:** Incendio y Calentamiento muestran "Todavía en construcción" hasta F2 y F4, con botón para volver. Solo texto, sin temporizadores.
+
+- **Pruebas:** `vitest.config.ts` incluye `tests/core` y `tests/ui`. Hay 20 pruebas nuevas: 9 del router (orden de salida y entrada, modo, hash, pantalla transitoria, navegación anidada, temporizadores parados al volver al menú y lectura del hash), 3 del destello y 8 del miniplano. No se ha relanzado la suite lenta del solver porque F0 no toca `src/engine`.
+
+- **Pendiente de comprobación en el móvil:** la cabecera a 360 px, la fila principal de la portada y las dos pantallas provisionales. Playwright no corre en este entorno.
+
 ## Contenido y diseño
 
 - **Corrección de ruta bajo `base: "/hora-muerta/"`.** `Layout.astro` (heredado de la plantilla de Astro) enlazaba `/favicon.svg` y `/favicon.ico` con ruta absoluta; bajo GitHub Pages con `base: "/hora-muerta/"` esos enlaces romperían. Se corrige usando `import.meta.env.BASE_URL` en ambos `<link>`.

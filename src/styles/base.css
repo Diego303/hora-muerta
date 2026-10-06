@@ -123,6 +123,162 @@ svg {
   text-align: center;
 }
 
+/* ---------- botón de acción de peligro (Modo Incendio) ---------- */
+.btn.danger {
+  background: var(--pencil);
+  border-color: var(--pencil);
+  color: var(--on-pencil);
+}
+.btn.danger:hover {
+  filter: brightness(1.08);
+}
+.btn svg {
+  width: 1.15em;
+  height: 1.15em;
+  flex: none;
+}
+
+/* ---------- destello al cambiar de modo visual (core/visualmode.ts) ---------- */
+.mode-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+  opacity: 0;
+}
+.mode-veil.ignite {
+  background: radial-gradient(ellipse at 50% 100%, #ffb13b 0%, #ff5a1f 35%, #160e0b 85%);
+  animation: veilIgnite 0.7s ease-out forwards;
+}
+.mode-veil.fade {
+  background: var(--paper);
+  animation: veilFade 0.3s ease-out forwards;
+}
+@keyframes veilIgnite {
+  0% {
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes veilFade {
+  0% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mode-veil {
+    display: none;
+  }
+}
+
+/* ---------- miniplano compartido (ui/planlite.ts) ---------- */
+.planlite {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+}
+.pl-room {
+  fill: var(--room);
+  stroke: var(--wall);
+  stroke-width: 2.5;
+}
+.pl-heat {
+  pointer-events: none;
+}
+.pl-room-box[data-room] {
+  cursor: pointer;
+}
+.pl-room-box[data-room]:focus-visible {
+  outline: none;
+}
+.pl-room-box[data-room]:focus-visible .pl-room {
+  stroke: var(--focus);
+  stroke-width: 4.5;
+}
+.pl-selected {
+  fill: none;
+  stroke: var(--amber);
+  stroke-width: 3.5;
+  pointer-events: none;
+}
+.pl-miss {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.5;
+  stroke-dasharray: 6 5;
+  pointer-events: none;
+}
+.pl-no {
+  fill: none;
+  stroke: var(--pencil);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.pl-mark {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 22px;
+  pointer-events: none;
+}
+.pl-ok {
+  fill: var(--ink);
+}
+.pl-bad {
+  fill: var(--pencil);
+}
+.pl-path {
+  stroke: var(--amber);
+  stroke-width: 4;
+  stroke-dasharray: 10 7;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.pl-door-dot {
+  fill: var(--paper);
+  stroke: var(--ink);
+  stroke-width: 1.2;
+}
+.pl-door text {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 9px;
+  fill: var(--ink);
+}
+.pl-token-label {
+  font-family: var(--body);
+  font-size: 10px;
+  font-weight: 700;
+  fill: #15222c;
+  pointer-events: none;
+}
+
+/* ---------- pantalla provisional (ui/pending.ts) ---------- */
+.pending-body {
+  padding: 40px 0 56px;
+}
+.pending h1 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(2.4rem, 9vw, 4.4rem);
+  line-height: 0.95;
+  margin: 0 0 0.4em;
+}
+.pending p {
+  color: var(--ink-2);
+  font-size: 1.1rem;
+  max-width: 34em;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.01ms !important;

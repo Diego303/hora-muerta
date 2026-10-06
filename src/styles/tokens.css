@@ -55,3 +55,24 @@
   --focus: #8cc4ff;
   color-scheme: dark;
 }
+
+/* Modo Incendio (docs/MODOS.md §1.2): su paleta manda sea cual sea el tema del
+   sistema. Va al final a propósito: tiene la misma especificidad (0,2,0) que los
+   temas de arriba y tiene que ganarles. Contraste comprobado (WCAG): texto
+   claro sobre cualquier superficie 13,9:1 o más; texto de botón oscuro sobre
+   brasa 6,1:1; bordes de control 3:1 o más. */
+:root[data-mode='fuego'] {
+  --paper: #160e0b;
+  --panel: #22150f;
+  --room: #2a1a13;
+  --ink: #f7e8d4;
+  --ink-2: #d9bda0;
+  --grid: #94634b;
+  --wall: #f0ad6e;
+  --pencil: #ff5a1f;
+  --on-pencil: #160e0b;
+  --blue: #ffb13b;
+  --amber: #ffb13b;
+  --focus: #ffb13b;
+  color-scheme: dark;
+}
