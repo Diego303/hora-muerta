@@ -84,3 +84,19 @@ export function fireTimes(input: FireInput): FireTimes {
   const burnAt = input.clueRooms.map((room) => clueBurnAt(ign, room, false));
   return { ign, burnAt };
 }
+
+export type PhotoCheck = 'ok' | 'no-photos' | 'too-late' | 'already-saved';
+
+/** ¿Se puede fotografiar ahora esta pista? Una pista que ya arde no se salva (MODOS 2.9). */
+export function photoCheck(state: ClueFire, photosLeft: number): PhotoCheck {
+  if (state === 'saved') return 'already-saved';
+  if (state === 'burning' || state === 'burnt') return 'too-late';
+  if (photosLeft <= 0) return 'no-photos';
+  return 'ok';
+}
+
+/** Calor de la vista previa de un edificio (sala del incendio): más intenso cerca
+ * del foco, nada a 4 puertas o más. Opacidad entre 0 y 0,8 por sala. */
+export function previewHeat(distances: readonly number[]): number[] {
+  return distances.map((d) => (d < 0 ? 0 : Math.max(0, 1 - d * 0.26) * 0.8));
+}

@@ -33,26 +33,63 @@ export function clueFocusTarget(clue: Clue): { rooms: Room[]; hour: Hour | null 
   }
 }
 
-export function renderClueList(container: HTMLElement, clues: Clue[], ctx: ClueTextContext, store: GameStore): void {
+/** Cómo pinta un modo especial cada pista (el Modo Incendio, docs/MODOS.md 2.6). La
+ * lista no sabe de incendios: solo pregunta qué clase poner, qué añadir a la
+ * derecha y si la pista ya no se puede leer. */
+export interface ClueDecor {
+  /** Texto o HTML sobre la lista (p. ej. las fotos que quedan). */
+  header(): string;
+  view(i: number): {
+    /** La pista ya no se puede leer: su texto no se pinta (no queda en el DOM). */
+    burnt: boolean;
+    className: string;
+    /** HTML a la derecha de la pista. Sus botones llevan data-clue-act. */
+    trailing: string;
+  };
+  /** Un botón con data-clue-act de la pista i. */
+  onAction(i: number, action: string): void;
+}
+
+export function renderClueList(container: HTMLElement, clues: Clue[], ctx: ClueTextContext, store: GameStore, decor?: ClueDecor): void {
   const state = store.getState();
   let currentCategory = '';
-  const parts: string[] = [];
+  const parts: string[] = decor ? [decor.header()] : [];
   clues.forEach((clue, i) => {
     const category = clueCategory(clue);
     if (category !== currentCategory) {
       currentCategory = category;
       parts.push(`<h3>${category}</h3>`);
     }
+    const extra = decor?.view(i);
+    if (extra?.burnt) {
+      parts.push(
+        `<p class="clue-row burnt ${extra.className}" data-i="${i}">` +
+          `<span class="n">${i + 1}</span><span class="burnt-label">Pista quemada</span><span class="ash" aria-hidden="true"></span>` +
+          `</p>`,
+      );
+      return;
+    }
     const struck = state.struck.has(i);
     const focused = state.clueFocus === i;
     parts.push(
-      `<p class="clue-row${struck ? ' struck' : ''}${focused ? ' focused' : ''}" data-i="${i}">` +
+      `<p class="clue-row${struck ? ' struck' : ''}${focused ? ' focused' : ''}${extra ? ` ${extra.className}` : ''}" data-i="${i}">` +
         `<button class="clue-check" data-strike="${i}" aria-label="${struck ? 'Destachar' : 'Tachar'} la pista ${i + 1}" aria-pressed="${struck}"></button>` +
         `<button class="clue-text" data-focus="${i}"><span class="n">${i + 1}</span> ${clueText(clue, ctx)}</button>` +
+        (extra ? extra.trailing : '') +
         `</p>`,
     );
   });
   container.innerHTML = parts.join('');
+
+  if (decor) {
+    container.querySelectorAll<HTMLButtonElement>('[data-clue-act]').forEach((button) => {
+      button.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const row = button.closest<HTMLElement>('[data-i]');
+        if (row) decor.onAction(Number(row.dataset.i), button.dataset.clueAct ?? '');
+      });
+    });
+  }
 
   container.querySelectorAll<HTMLButtonElement>('[data-strike]').forEach((button) => {
     button.addEventListener('click', (e) => {

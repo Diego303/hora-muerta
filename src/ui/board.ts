@@ -23,6 +23,7 @@ import { openAccuseSheet } from './accuse';
 import { setupChalk } from './chalk';
 import { renderCaseTab } from './casetab';
 import { clueFocusTarget, renderClueList } from './clues';
+import type { ClueDecor } from './clues';
 import { renderClosure } from './closure';
 import { renderObjectsTable } from './objects';
 import { buildPlan } from './plan';
@@ -38,6 +39,20 @@ export interface FireHooks {
   notice(message: string): void;
   /** Se acaba de hacer una acusación errónea (y el edificio sigue en pie). */
   onWrongAccusation(): void;
+  /** Pone la capa de fuego sobre un plano (el normal y el ampliado). Devuelve cómo quitarla. */
+  decoratePlan(svg: SVGSVGElement, plan: PlanHandle): () => void;
+  /** Cómo se pinta cada pista: mecha, foto, quemada. */
+  clueDecor: ClueDecor;
+  /** El caso se ha resuelto: el tablero ya se ha parado y el modo pinta su propio cierre. */
+  onSolved(): void;
+  /** Salir a mitad: el modo decide si pregunta antes. */
+  confirmExit(proceed: () => void): void;
+}
+
+/** Lo que el tablero ofrece a quien lo engancha desde fuera (onReady). */
+export interface BoardHandle {
+  /** Vuelve a pintar Pistas, Objetos y Caso sin que cambie el store (p. ej. una pista que arde). */
+  refreshSheet(): void;
 }
 
 export interface BoardOptions {
@@ -52,7 +67,7 @@ export interface BoardOptions {
   /** Se llama una vez, justo después de montar el tablero, con el store y el
    * plano ya construidos (ui/tutorial.ts lo usa para enganchar el "coach" sin
    * que board.ts sepa nada del tutorial). */
-  onReady?: (store: GameStore, plan: PlanHandle) => void;
+  onReady?: (store: GameStore, plan: PlanHandle, board: BoardHandle) => void;
 }
 
 function findMap(mapId: CaseDef['map']): MapDef {
@@ -226,6 +241,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
 
   const plan: PlanHandle = buildPlan(mapSvg, map, { interactive: true, crimeRoom: caseData.rv, victimLabel: victimName });
   const chalk = setupChalk(chalkCanvas, plan.width, plan.height, store);
+  const undecoratePlan = fire?.decoratePlan(mapSvg, plan) ?? null;
 
   plan.hits.forEach((hit) => {
     const room = Number(hit.dataset.r);
@@ -274,6 +290,13 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   root.querySelector('#undo')?.addEventListener('click', () => store.undo());
   root.querySelector('#expand')?.addEventListener('click', () => openExpandedPlan());
   root.querySelector('#exit')?.addEventListener('click', () => {
+    if (fire) {
+      fire.confirmExit(() => {
+        cleanup();
+        options.onExit();
+      });
+      return;
+    }
     cleanup();
     options.onExit();
   });
@@ -404,7 +427,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
       button.setAttribute('aria-pressed', String(button.dataset.tab === state.sheetTab));
     });
     sheetBody.dataset.activeTab = state.sheetTab;
-    renderClueList(pistasBody, caseData.clues, textCtx, store);
+    renderClueList(pistasBody, caseData.clues, textCtx, store, fire?.clueDecor);
     renderObjectsTable(objetosBody, textCtx, store);
     renderCaseTab(casoBody, map, caseData, textCtx, store);
   }
@@ -513,7 +536,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   const unsubscribe = store.subscribe(renderAll);
   renderLegend();
   renderAll();
-  options.onReady?.(store, plan);
+  options.onReady?.(store, plan, { refreshSheet: renderSheet });
 
   // Guardado automático con 300 ms de retardo tras cada acción, y al momento
   // si se oculta la pestaña (§18), para no perder el progreso al recargar.
@@ -591,6 +614,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     if (!svgEl || !canvasEl || !timesExpanded) return;
     const expandedPlan = buildPlan(svgEl, map, { interactive: true, crimeRoom: caseData.rv, victimLabel: victimName });
     const expandedChalk = setupChalk(canvasEl, expandedPlan.width, expandedPlan.height, store);
+    const undecorateExpanded = fire?.decoratePlan(svgEl, expandedPlan) ?? null;
     expandedPlan.hits.forEach((hit) => {
       const room = Number(hit.dataset.r);
       hit.addEventListener('click', () => roomTap(room));
@@ -614,6 +638,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     redrawExpanded();
     const close = (): void => {
       unsub();
+      undecorateExpanded?.();
       expandedChalk.destroy();
       overlay.remove();
       expandCleanup = null;
@@ -637,6 +662,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     document.removeEventListener('keydown', onGlobalKeydown);
     clearInterval(tickTimer);
     chalk.destroy();
+    undecoratePlan?.();
     expandCleanup?.();
     stopClosure();
   }
@@ -670,15 +696,20 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   function showClosure(): void {
     const finalState = store.getState();
     cleanup();
-    // Un incendio nunca se guarda: cerrar uno no debe borrar el caso normal en curso.
-    if (!fire) clearSavedGame();
+    // El Modo Incendio tiene su propio cierre (medallas, récords) y nunca se guarda,
+    // así que tampoco puede borrar el caso normal en curso ni contar como caso jugado.
+    if (fire) {
+      fire.onSolved();
+      return;
+    }
+    clearSavedGame();
     if (options.bankVersion) markPlayed(options.bankVersion, caseData.id);
     // Progresión (§16): cada caso RESUELTO (no un archivado sin resolver)
     // cuenta para el rango, los recuentos por nivel y el archivo de
     // arquetipos, sea cual sea el modo (suelto, diario o una noche de
     // expediente). El tutorial es la única excepción: no cuenta en las
     // estadísticas (game/tutorial.ts).
-    if (finalState.result === 'solved' && caseData.id !== TUTORIAL_CASE_ID && !fire) {
+    if (finalState.result === 'solved' && caseData.id !== TUTORIAL_CASE_ID) {
       const { profile, newArchetypes } = recordClosure(getProfile(), {
         caseData,
         stars: computeStars(finalState.errors, finalState.hintsUsed),

@@ -28,6 +28,8 @@ import { renderPendingView } from './ui/pending';
 import { loadFireCases } from './modes/fire/cases';
 import { mountFireCase } from './modes/fire/mount';
 import { renderFireLobby } from './modes/fire/ui/lobby';
+import { loadFireRecords } from './modes/fire/records';
+import { startEmbers } from './modes/fire/theme/embers';
 import type { FireCase } from './modes/fire/types';
 import { renderProfile } from './ui/profile';
 import { renderSettings } from './ui/settings';
@@ -125,7 +127,12 @@ function fireLobbyView(): ViewDef<undefined> {
       loadFireCases()
         .then((cases) => {
           if (mine !== token) return;
-          stop = renderFireLobby(app, cases, { onEnter: enterFire, onBack: showLanding });
+          const leaveLobby = renderFireLobby(app, cases, loadFireRecords(), { onEnter: enterFire, onBack: showLanding });
+          const stopEmbers = startEmbers(() => 0.12);
+          stop = () => {
+            stopEmbers();
+            leaveLobby();
+          };
         })
         .catch(() => {
           if (mine === token) toast('No se han podido cargar los edificios.');

@@ -94,9 +94,18 @@ test('el tiempo se detiene con la pestaña oculta y al volver aparece "En pausa"
   await expect(page.locator('#fireClock')).toHaveText('4:50');
 });
 
-test('volver al menú desde el incendio recupera la estética normal', async ({ page }) => {
+test('salir a mitad pide confirmación; al salir se recupera la estética normal', async ({ page }) => {
   await enterFirstBuilding(page);
   await page.locator('#exit').click();
+  const dialog = page.getByRole('alertdialog', { name: 'Salir del edificio' });
+  await expect(dialog).toContainText('Si sales, el incendio se pierde. ¿Salir?');
+
+  // Cancelar deja seguir jugando.
+  await dialog.getByRole('button', { name: 'Seguir dentro' }).click();
+  await expect(page.locator('#fireClock')).toBeVisible();
+
+  await page.locator('#exit').click();
+  await page.getByRole('alertdialog', { name: 'Salir del edificio' }).getByRole('button', { name: 'Salir' }).click();
   await expect(page.locator('#goDaily')).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-mode', '');
 });

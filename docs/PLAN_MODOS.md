@@ -144,20 +144,20 @@ Cada fase se cierra con `pnpm typecheck`, `pnpm lint`, `pnpm test` (y `pnpm test
 - [x] Pruebas: 53 unitarias en `tests/fire/` y e2e `tests/e2e/fire.spec.ts` (derrumbe, penalización, pausa). El e2e no se puede ejecutar aquí: falta `libnspr4.so`.
 - **Hecho cuando:** pruebas unitarias en verde (235 en total) y e2e escrito. Falta que lo ejecutes tú.
 
-### F2 · Incendio completo
-- [ ] Fotos (2 por caso); pista salvada nunca arde; mecha con contador a 30 s o menos.
-- [ ] Quemado: animación de 4 s, después "Pista quemada" y el texto eliminado del DOM, con barra de ceniza.
-- [ ] Línea de estado ("Arden: X. Después: Y, dentro de 0:20") y barra del edificio.
-- [ ] Pista del inspector desactivada en modo fuego.
-- [ ] Sala del incendio `#incendio`: tarjetas con miniplano de calor (`planlite`), mejor marca, filtro por nivel.
-- [ ] Cierre con medallas: Sin fotos, A tiempo (más de 2:00 sobrantes) y Sin errores. Derrumbe con Volver a entrar y Ver la solución.
-- [ ] Diálogo de salida a mitad: "Si sales, el incendio se pierde. ¿Salir?".
-- [ ] Chispas en un único `<canvas>`, con 80 partículas como máximo; se paran en pausa, con la pestaña oculta y con movimiento reducido.
-- [ ] Anunciador `role="status"` solo para cambios importantes.
-- [ ] Contraste AA calculado para la paleta de fuego (texto oscuro sobre brasa, etc.).
-- [ ] Récords en `hm2:fire` y estrellas según D12.
-- [ ] Casos límite de 2.9 cubiertos por pruebas donde sean unitarios (acusar con la hoja abierta al llegar a 0, penalización por debajo de cero, foto sobre pista ardiendo, Ver con filtro, reinicio al volver a entrar).
-- **Hecho cuando:** criterios 2.10 (3, 4 y 5). Las capturas a 390×844 y 1280×800 las haces tú.
+### F2 · Incendio completo — ✅ hecha
+- [x] Fotos (2 por caso); pista salvada nunca arde; mecha con contador a 30 s o menos.
+- [x] Quemado: 4 s "Ardiendo", después "Pista quemada" con ceniza y el texto fuera del DOM.
+- [x] Línea de estado y barra del edificio.
+- [x] Pista del inspector desactivada en modo fuego (F1).
+- [x] Sala del incendio `#incendio`: cinco reglas, filtro por nivel, tarjetas con miniplano de calor (planlite) y mejor marca.
+- [x] Cierre con medallas (Sin fotos, A tiempo, Sin errores); derrumbe con Volver a entrar, Ver la solución y Volver.
+- [x] Diálogo de salida a mitad: "Si sales, el incendio se pierde. ¿Salir?".
+- [x] Chispas en un único `<canvas>`, con 80 partículas como máximo; paradas con la pestaña oculta, al salir y con movimiento reducido.
+- [x] Anunciador `role="status"` solo con cambios importantes; salas en llamas en su `aria-label`.
+- [x] Contraste AA comprobado por prueba sobre la paleta real de `tokens.css`.
+- [x] Récords en `hm2:fire` y estrellas según D12 (solo lo que mejora la mejor marca).
+- [x] Casos límite de 2.9: penalización por debajo de cero (F1), foto sobre pista ardiendo, pista enfocada que se quema, reinicio al volver a entrar, capa de fuego también en el plano ampliado.
+- **Hecho cuando:** 263 pruebas unitarias en verde; e2e y capturas escritos (`tests/e2e/fire-complete.spec.ts`). Falta que los ejecutes tú: `pnpm test:e2e`, y las capturas quedan en `test-results/`.
 
 ### F3 · Incendio en el banco
 - [ ] Grupo `incendio` en `bank.config.ts`: 20 Novato y 20 Inspector exprés (tope de 9 pistas).

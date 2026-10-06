@@ -54,6 +54,11 @@ function rectOf(map: MapDef, r: Room): { x: number; y: number; w: number; h: num
   return { x: PAD + room.x * UNIT + INSET, y: PAD + room.y * UNIT + INSET, w: room.w * UNIT - 2 * INSET, h: room.h * UNIT - 2 * INSET };
 }
 
+/** Centro de una sala en coordenadas del miniplano (para dibujar encima, p. ej. el foco de un incendio). */
+export function planLiteRoomCenter(map: MapDef, r: Room): { x: number; y: number } {
+  return centerOf(map, r);
+}
+
 function centerOf(map: MapDef, r: Room): { x: number; y: number } {
   const q = rectOf(map, r);
   return { x: q.x + q.w / 2, y: q.y + q.h / 2 };
