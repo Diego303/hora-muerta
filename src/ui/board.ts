@@ -16,7 +16,7 @@ import { TUTORIAL_CASE_ID } from '../game/tutorial';
 import type { AccusationOutcome } from '../game/scoring';
 import { computeStars } from '../game/scoring';
 import { clearSavedGame, loadSavedGame, saveGame } from '../game/session';
-import type { ChalkColor, GameStore, MarkValue } from '../game/store';
+import type { BoardLocks, ChalkColor, GameStore, MarkValue } from '../game/store';
 import { createGameStore, markKey } from '../game/store';
 import { effectiveMoveHelp, getProfile, getSettings, saveProfile } from '../game/storage';
 import { openAccuseSheet } from './accuse';
@@ -29,9 +29,22 @@ import { buildPlan } from './plan';
 import type { PlanHandle, SuspectView } from './plan';
 import { toast } from './toast';
 
+/** Lo que el Modo Incendio necesita del tablero (docs/MODOS.md 2.2). El tablero
+ * no sabe de tiempos ni de fuego: solo pregunta y avisa. */
+export interface FireHooks {
+  roomBurning(room: Room): boolean;
+  /** El edificio se ha derrumbado: no se acusa ni se marca. */
+  frozen(): boolean;
+  notice(message: string): void;
+  /** Se acaba de hacer una acusación errónea (y el edificio sigue en pie). */
+  onWrongAccusation(): void;
+}
+
 export interface BoardOptions {
   onExit: () => void;
   onNextCase: (finishedCase: CaseDef) => void;
+  /** Presente solo en el Modo Incendio: cambia lo que se guarda, la acusación y las pistas. */
+  fire?: FireHooks;
   /** Versión del banco de la que viene `caseData` (§12.5, §12.6), para marcarlo
    * como jugado al cerrar el caso; `null` si no viene de un banco versionado
    * (p. ej. modo infinito). */
@@ -97,15 +110,36 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   // (§13): esta noche por sí sola nunca se archiva; el handler de la
   // acusación (más abajo) lleva la cuenta compartida aparte. El tutorial
   // tampoco tiene presupuesto de errores: "equivócate sin miedo".
-  const maxErrors = caseData.mode === 'expediente' || caseData.id === TUTORIAL_CASE_ID ? Number.POSITIVE_INFINITY : 2;
-  const store = createGameStore(caseData, map.rooms.length, nextHint, maxErrors);
+  // En el Modo Incendio el presupuesto de errores no existe: cada acusación errónea
+  // resta tiempo (FireHooks.onWrongAccusation). Las salas en llamas y el derrumbe
+  // se consultan en cada acción; roomAtPoint usa el plano, que se construye más abajo.
+  const fire = options.fire;
+  const maxErrors =
+    fire || caseData.mode === 'expediente' || caseData.id === TUTORIAL_CASE_ID ? Number.POSITIVE_INFINITY : 2;
+  const locks: BoardLocks | undefined = fire
+    ? {
+        roomBurning: (room) => fire.roomBurning(room),
+        roomAt: (point) => roomAtPoint(point),
+        frozen: () => fire.frozen(),
+        notice: (message) => fire.notice(message),
+      }
+    : undefined;
+  const store = createGameStore(caseData, map.rooms.length, nextHint, maxErrors, locks);
 
   // Caso en curso (§18, hm2:game): retoma el progreso guardado si es el mismo
   // caso; si no, empieza de cero. Abrir la web no lo descarta; solo cerrar el
-  // caso (showClosure) lo borra.
-  const resumed = loadSavedGame();
+  // caso (showClosure) lo borra. El Modo Incendio no se guarda: recargar es abandonar.
+  const resumed = fire ? null : loadSavedGame();
   const startedAt = resumed && resumed.caseId === caseData.id ? resumed.startedAt : Date.now();
   if (resumed && resumed.caseId === caseData.id) store.hydrate(resumed);
+
+  function roomAtPoint(point: [number, number]): Room | null {
+    for (let room = 0; room < map.rooms.length; room++) {
+      const rect = plan.roomRect(room);
+      if (point[0] >= rect.x && point[0] <= rect.x + rect.w && point[1] >= rect.y && point[1] <= rect.y + rect.h) return room;
+    }
+    return null;
+  }
 
   root.innerHTML = `
     <div class="game" id="gameRoot" data-case-id="${caseData.id}">
@@ -255,8 +289,14 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
       store.setHour(hint.hour);
     }
   });
+  // La pista del inspector no existe en el Modo Incendio: es un modo de presión (MODOS 2.2).
+  if (fire) root.querySelector<HTMLButtonElement>('#hintBtn')?.setAttribute('hidden', '');
   hintExplainBtn.addEventListener('click', () => store.explainHint());
   root.querySelector('#accuseBtn')?.addEventListener('click', () => {
+    if (fire?.frozen()) {
+      toast('El edificio ya se ha derrumbado.');
+      return;
+    }
     if (caseData.mode === 'expediente') {
       const errorsLeft = loadSeriesProgress()?.errorsLeft ?? 3;
       openAccuseSheet(textCtx, store, {
@@ -266,8 +306,13 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
       return;
     }
     openAccuseSheet(textCtx, store, {
-      errorsLabel: `Errores: ${store.getState().errors}/2`,
+      errorsLabel: fire ? 'Cada acusación errónea resta 30 segundos.' : `Errores: ${store.getState().errors}/2`,
       onOutcome: (outcome) => {
+        if (fire) {
+          if (outcome.correct) showClosure();
+          else fire.onWrongAccusation();
+          return;
+        }
         if (outcome.correct || outcome.result === 'archived') {
           showClosure();
           return;
@@ -480,7 +525,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     }
     // El tutorial no se guarda como "caso en curso": no está en ningún banco,
     // así que "Seguir el caso" no podría volver a abrirlo (§18).
-    if (caseData.id === TUTORIAL_CASE_ID) return;
+    if (caseData.id === TUTORIAL_CASE_ID || fire) return;
     saveGame(caseData.id, caseData.mode, store.getState(), startedAt);
   }
   const unsaveSubscribe = store.subscribe(() => {
@@ -625,14 +670,15 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   function showClosure(): void {
     const finalState = store.getState();
     cleanup();
-    clearSavedGame();
+    // Un incendio nunca se guarda: cerrar uno no debe borrar el caso normal en curso.
+    if (!fire) clearSavedGame();
     if (options.bankVersion) markPlayed(options.bankVersion, caseData.id);
     // Progresión (§16): cada caso RESUELTO (no un archivado sin resolver)
     // cuenta para el rango, los recuentos por nivel y el archivo de
     // arquetipos, sea cual sea el modo (suelto, diario o una noche de
     // expediente). El tutorial es la única excepción: no cuenta en las
     // estadísticas (game/tutorial.ts).
-    if (finalState.result === 'solved' && caseData.id !== TUTORIAL_CASE_ID) {
+    if (finalState.result === 'solved' && caseData.id !== TUTORIAL_CASE_ID && !fire) {
       const { profile, newArchetypes } = recordClosure(getProfile(), {
         caseData,
         stars: computeStars(finalState.errors, finalState.hintsUsed),

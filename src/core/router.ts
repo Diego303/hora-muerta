@@ -10,7 +10,8 @@ export type VisualMode = 'fuego' | null;
 export type Leave = () => void;
 
 export interface ViewDef<P> {
-  mode: VisualMode;
+  /** Modo visual de la vista; si depende de los parámetros (una partida de incendio), una función. */
+  mode: VisualMode | ((params: P) => VisualMode);
   /** Arranca lo que la vista necesita (temporizadores, escuchas, suscripciones). */
   enter(params: P): void;
   /** Pinta o repinta lo que muestra la vista. Lo llama el router al entrar y con render(). */
@@ -67,8 +68,9 @@ export function createRouter<P extends Record<ViewName, unknown>>(views: ViewDef
       const def = views[name];
       const params = args[0] as P[typeof name];
       clearScreen();
-      env.applyMode(def.mode, mode);
-      mode = def.mode;
+      const next = typeof def.mode === 'function' ? def.mode(params) : def.mode;
+      env.applyMode(next, mode);
+      mode = next;
       const token = ++generation;
       def.enter(params);
       if (token !== generation) {

@@ -1,0 +1,214 @@
+/* Modo Incendio (docs/MODOS.md 2.6 y 2.7). La paleta viene de tokens.css
+   (:root[data-mode='fuego']). Nada parpadea más de 3 veces por segundo: las
+   llamas oscilan con un periodo de 1,2 s y el reloj del último minuto late a 1 Hz. */
+
+/* ---------- capa de fuego sobre el plano ---------- */
+.fl-char {
+  opacity: 0.92;
+}
+.fl-glow {
+  fill: none;
+  stroke: #ff5a1f;
+  stroke-width: 3;
+}
+.fl-heat {
+  fill: #ff8a2a;
+  fill-opacity: 0.32;
+  stroke: #ffb13b;
+  stroke-width: 2.5;
+  stroke-dasharray: 8 5;
+}
+.fl-count {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 20px;
+  fill: #ffe2b8;
+  paint-order: stroke;
+  stroke: #160e0b;
+  stroke-width: 4;
+  font-variant-numeric: tabular-nums;
+}
+.fl-tag {
+  font-family: var(--body);
+  font-weight: 700;
+  font-size: 10px;
+  fill: #ffb13b;
+  paint-order: stroke;
+  stroke: #160e0b;
+  stroke-width: 3;
+}
+.fl-flame {
+  fill: #ffb13b;
+  stroke: #ff5a1f;
+  stroke-width: 1.5;
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: flFlicker 1.2s ease-in-out infinite alternate;
+}
+@keyframes flFlicker {
+  from {
+    transform: scale(1, 1);
+  }
+  to {
+    transform: scale(0.9, 1.15);
+  }
+}
+
+/* ---------- reloj en la cabecera ---------- */
+.fire-clock {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.5rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  padding: 2px 8px;
+  border: 2px solid var(--grid);
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.fire-clock.hot {
+  color: var(--on-pencil);
+  background: var(--pencil);
+  border-color: var(--pencil);
+  animation: fireBeat 1s ease-in-out infinite;
+}
+@keyframes fireBeat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+/* ---------- capas "En pausa" y derrumbe ---------- */
+.fire-pause,
+.fire-collapse {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, #160e0b 82%, transparent);
+}
+.fire-pause {
+  z-index: 44;
+}
+.fire-collapse {
+  z-index: 46;
+}
+.fire-pause[hidden] {
+  display: none;
+}
+.fire-pause-card,
+.fire-collapse-card {
+  width: min(100%, 420px);
+  background: var(--panel);
+  color: var(--ink);
+  border: 2px solid var(--pencil);
+  border-radius: 4px;
+  padding: 20px;
+}
+.fire-pause-card h2,
+.fire-collapse-card h2 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.9rem;
+  line-height: 1;
+  margin: 0 0 0.4em;
+}
+.fire-pause-card p,
+.fire-collapse-card p {
+  color: var(--ink-2);
+  margin: 0 0 1em;
+}
+.fire-pause-card .btn {
+  width: 100%;
+  justify-content: center;
+}
+.fire-collapse-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.fire-collapse-actions .btn {
+  flex: 1 1 140px;
+  justify-content: center;
+}
+
+/* ---------- lista de edificios ---------- */
+.fire-loading {
+  padding: 40px 20px;
+  color: var(--ink-2);
+}
+.fire-hero {
+  padding: 8px 0 24px;
+}
+.fire-title {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(2.6rem, 10vw, 4.6rem);
+  line-height: 0.95;
+  margin: 0 0 0.3em;
+  background: linear-gradient(180deg, #ffd27a 0%, #ff5a1f 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.fire-hero .lead {
+  color: var(--ink-2);
+  font-size: 1.1rem;
+  max-width: 34em;
+  margin: 0;
+}
+.fire-cases {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  padding-bottom: 40px;
+}
+@media (min-width: 760px) {
+  .fire-cases {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.fcard {
+  border: 2px solid var(--grid);
+  background: var(--panel);
+  border-radius: 4px;
+  padding: 16px 18px;
+}
+.fcard .lv {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--amber);
+}
+.fcard h2 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.7rem;
+  line-height: 1;
+  margin: 0.25em 0 0.4em;
+}
+.fcard p {
+  margin: 0 0 0.7em;
+}
+.fcard .meta {
+  color: var(--ink-2);
+  font-size: 0.92rem;
+}
+.fcard .btn {
+  width: 100%;
+  justify-content: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fl-flame,
+  .fire-clock.hot {
+    animation: none;
+  }
+}

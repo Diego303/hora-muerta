@@ -69,8 +69,21 @@ function hintsEqual(a: Hint | null, b: Hint): boolean {
   return true; // los dos son 'done'
 }
 
+/** Qué está en llamas en el Modo Incendio (docs/MODOS.md 2.2). Lo implementa el
+ * propio modo y lo recibe el store: el store no sabe nada de incendios. */
+export interface BoardLocks {
+  /** La sala está en llamas ahora mismo: no admite marcas nuevas ni cambios. */
+  roomBurning(room: Room): boolean;
+  /** Sala bajo un punto de la pizarra (coordenadas del viewBox), o null si cae fuera del plano. */
+  roomAt(point: [number, number]): Room | null;
+  /** El edificio se ha derrumbado: no se marca, no se traza ni se acusa. */
+  frozen(): boolean;
+  /** Aviso breve para quien juega. */
+  notice(message: string): void;
+}
+
 type UndoAction =
-  | { k: 'mark'; key: string; prev: MarkValue }
+  | { k: 'mark'; key: string; room: Room; prev: MarkValue }
   | { k: 'stroke'; stroke: ChalkStroke }
   | { k: 'unstroke'; stroke: ChalkStroke }
   | { k: 'strokes'; strokes: ChalkStroke[] }
@@ -96,6 +109,8 @@ export interface GameStore {
   selectSuspect(c: Sus): void;
   setFilter(filter: ViewFilter): void;
   mark(room: Room): void;
+  /** Pide permiso para empezar un trazo en `point`. Si no se puede, avisa y devuelve false. */
+  requestStroke(point: [number, number]): boolean;
   setChalkColor(color: ChalkColor): void;
   setEraseMode(on: boolean): void;
   setAllLayer(on: boolean): void;
@@ -138,6 +153,7 @@ export function createGameStore(
   roomCount: number,
   computeHint: (caseData: CaseDef, roomCount: number, state: GameState) => Hint,
   maxErrors = 2,
+  locks?: BoardLocks,
 ): GameStore {
   const state: GameState = {
     caseData,
@@ -173,6 +189,21 @@ export function createGameStore(
     for (const listener of listeners) listener();
   }
 
+  const roomBurning = (room: Room): boolean => locks?.roomBurning(room) ?? false;
+  const pointBurning = (point: [number, number]): boolean => {
+    const room = locks?.roomAt(point) ?? null;
+    return room !== null && roomBurning(room);
+  };
+  const strokeBurning = (stroke: ChalkStroke): boolean => stroke.points.length > 0 && pointBurning(stroke.points[0]);
+  const frozen = (): boolean => locks?.frozen() ?? false;
+  const notice = (message: string): void => locks?.notice(message);
+  const undoTouchesBurning = (action: UndoAction): boolean => {
+    if (action.k === 'mark') return roomBurning(action.room);
+    if (action.k === 'stroke' || action.k === 'unstroke') return strokeBurning(action.stroke);
+    if (action.k === 'strokes') return action.strokes.some(strokeBurning);
+    return false;
+  };
+
   function distanceTo(points: [number, number][], point: [number, number]): number {
     let best = Infinity;
     for (const p of points) {
@@ -207,13 +238,29 @@ export function createGameStore(
     },
     mark(room) {
       if (state.mode !== 'mark') return;
+      if (frozen()) return;
+      if (roomBurning(room)) {
+        notice('Esa sala está en llamas: ya no se puede anotar.');
+        return;
+      }
       const key = markKey(state.hour, room, state.selectedSuspect);
       const prev = state.marks.get(key) ?? 0;
       const next = ((prev + 1) % 3) as MarkValue;
       if (next === 0) state.marks.delete(key);
       else state.marks.set(key, next);
-      undoStack.push({ k: 'mark', key, prev });
+      undoStack.push({ k: 'mark', key, room, prev });
       notify();
+    },
+    requestStroke(point) {
+      if (frozen()) {
+        notice('El edificio se ha derrumbado.');
+        return false;
+      }
+      if (pointBurning(point)) {
+        notice('Esa sala está en llamas: no se puede dibujar ahí.');
+        return false;
+      }
+      return true;
     },
     setChalkColor(color) {
       state.chalkColor = color;
@@ -257,8 +304,15 @@ export function createGameStore(
       notify();
     },
     undo() {
+      if (frozen()) return;
       const action = undoStack.pop();
       if (!action) return;
+      if (undoTouchesBurning(action)) {
+        // Se descarta la entrada: deshacer algo de una sala en llamas ya no se puede (MODOS 2.2).
+        notice('Esa acción afecta a una sala en llamas y no se puede deshacer.');
+        notify();
+        return;
+      }
       if (action.k === 'mark') {
         if (action.prev === 0) state.marks.delete(action.key);
         else state.marks.set(action.key, action.prev);
@@ -348,7 +402,7 @@ export function createGameStore(
       notify();
     },
     accuse() {
-      if (state.accuseCulprit === null || state.accuseWeapon === null) {
+      if (frozen() || state.accuseCulprit === null || state.accuseWeapon === null) {
         return { correct: false, errors: state.errors, result: state.result };
       }
       const outcome = checkAccusation(state.caseData, state.accuseCulprit, state.accuseWeapon, state.errors, maxErrors);

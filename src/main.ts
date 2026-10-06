@@ -25,6 +25,10 @@ import { renderLanding } from './ui/landing';
 import { linkForCase } from './ui/links';
 import { renderLoading } from './ui/loading';
 import { renderPendingView } from './ui/pending';
+import { loadFireCases } from './modes/fire/cases';
+import { mountFireCase } from './modes/fire/mount';
+import { renderFireLobby } from './modes/fire/ui/lobby';
+import type { FireCase } from './modes/fire/types';
 import { renderProfile } from './ui/profile';
 import { renderSettings } from './ui/settings';
 import { toast } from './ui/toast';
@@ -37,6 +41,8 @@ const app: HTMLElement = appEl;
 /** Una partida del tablero: el hash que la representa (o null) y cómo montarla. */
 interface GameRoute {
   hash: string | null;
+  /** Modo visual de la partida: el Modo Incendio se juega con su paleta. */
+  mode?: 'fuego';
   mount: () => () => void;
 }
 
@@ -63,7 +69,11 @@ function writeHash(hash: string | null): void {
 
 /** Vista que monta una pantalla completa: lo que devuelve mount es cómo pararla.
  * Se pinta sola al montarse, así que render no hace nada. */
-function screenView<P>(mount: (params: P) => () => void, mode: VisualMode, hash: (params: P) => string | null): ViewDef<P> {
+function screenView<P>(
+  mount: (params: P) => () => void,
+  mode: VisualMode | ((params: P) => VisualMode),
+  hash: (params: P) => string | null,
+): ViewDef<P> {
   let stop: (() => void) | null = null;
   return {
     mode,
@@ -99,11 +109,55 @@ function pendingView(title: string, text: string, mode: VisualMode, hash: string
   };
 }
 
+/** Vista del Modo Incendio: la lista de edificios. Los casos se cargan al pintarla. */
+function fireLobbyView(): ViewDef<undefined> {
+  let stop: (() => void) | null = null;
+  let token = 0;
+  return {
+    mode: 'fuego',
+    hash: () => 'incendio',
+    enter: () => undefined,
+    render: () => {
+      stop?.();
+      stop = null;
+      const mine = ++token;
+      app.innerHTML = '<p class="fire-loading">Cargando…</p>';
+      loadFireCases()
+        .then((cases) => {
+          if (mine !== token) return;
+          stop = renderFireLobby(app, cases, { onEnter: enterFire, onBack: showLanding });
+        })
+        .catch(() => {
+          if (mine === token) toast('No se han podido cargar los edificios.');
+        });
+    },
+    leave: () => {
+      token++;
+      stop?.();
+      stop = null;
+    },
+  };
+}
+
+/** Entra en un edificio: una partida nueva con su propio reloj. */
+function enterFire(fire: FireCase): void {
+  router.showView('game', {
+    hash: null,
+    mode: 'fuego',
+    mount: () =>
+      mountFireCase(app, fire, {
+        onExit: showLanding,
+        onRestart: () => enterFire(fire),
+        onLobby: () => router.showView('fire'),
+      }),
+  });
+}
+
 const router = createRouter<AppRoutes>(
   {
     home: screenView(() => mountLanding(), null, () => null),
-    game: screenView((route: GameRoute) => route.mount(), null, (route) => route.hash),
-    fire: pendingView('Modo Incendio', 'Todavía en construcción.', 'fuego', 'incendio'),
+    game: screenView((route: GameRoute) => route.mount(), (route) => route.mode ?? null, (route) => route.hash),
+    fire: fireLobbyView(),
     academy: pendingView('Calentamiento', 'Todavía en construcción.', null, 'academia'),
   },
   {

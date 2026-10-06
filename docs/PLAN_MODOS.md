@@ -133,16 +133,16 @@ Cada fase se cierra con `pnpm typecheck`, `pnpm lint`, `pnpm test` (y `pnpm test
 - [x] Prueba: al volver al menú no queda ningún temporizador, intervalo ni `requestAnimationFrame` activo. Unitaria en `tests/core/router.test.ts` (con control que demuestra que detecta una fuga) y de extremo a extremo en `tests/e2e/router.spec.ts`, que mide en la página misma (esta última no se ejecuta aquí). Se corrigieron dos fugas reales (carga asíncrona de la portada y scroll del coach).
 - **Hecho cuando:** criterio 1.1 cumplido en pruebas (20 nuevas en verde). Falta tu comprobación en el móvil (360 px, portada, pantallas provisionales).
 
-### F1 · Incendio, núcleo
-- [ ] `modes/fire/config.ts` con las constantes de la tabla 2.2.
-- [ ] `timeline.ts`: `roomState`, `clueBurnAt` y `clueState` puras, con tabla de estados para varios `t` en los 2 casos de prueba (D3).
-- [ ] `isRoomLocked` en el store: no hay marcas ni trazos nuevos en salas en llamas; las marcas previas se ven; la goma funciona; deshacer descarta la entrada afectada y avisa (D11).
-- [ ] Reloj de 300 s hacia atrás, con pausa al ocultar la pestaña y capa "En pausa" con botón Seguir.
-- [ ] Penalización de −30 s; derrumbe al llegar a 0 o si la penalización lo deja por debajo.
-- [ ] Capa de fuego en el plano (carbón, bordes, llamas, aviso naranja con cuenta atrás), redibujada solo al cambiar un estado.
-- [ ] Casos de prueba: 2 casos de nuestro generador con semilla fija (D3).
-- [ ] Pruebas: `timeline` y un e2e de derrumbe escrito.
-- **Hecho cuando:** pruebas unitarias en verde y e2e escrito (lo ejecutas tú).
+### F1 · Incendio, núcleo — ✅ hecha
+- [x] `modes/fire/config.ts` con las constantes de la tabla 2.2.
+- [x] `timeline.ts`: `roomState`, `clueBurnAt`, `clueState` y `fireTimes` puras, con tabla de estados para varios `t` en los 2 casos de prueba (D3).
+- [x] Bloqueos en el store (`BoardLocks`): ni marcas ni trazos nuevos en salas en llamas; las marcas previas se ven; la goma funciona; deshacer descarta la entrada afectada y avisa (D11).
+- [x] Reloj de 300 s hacia atrás (`session.ts`), con pausa al ocultar la pestaña y capa "En pausa" con botón Seguir.
+- [x] Penalización de 30 s; derrumbe al llegar a 0 o en el momento si la penalización lo deja por debajo; "Volver a entrar".
+- [x] Capa de fuego en el plano (carbón, bordes, llama, aviso naranja con cuenta atrás), redibujada solo al cambiar un estado.
+- [x] Casos de prueba: los 2 edificios del prototipo generados con nuestro motor (`scripts/build-fire-fixtures.ts`, `public/cases/incendio.json`) y verificados.
+- [x] Pruebas: 53 unitarias en `tests/fire/` y e2e `tests/e2e/fire.spec.ts` (derrumbe, penalización, pausa). El e2e no se puede ejecutar aquí: falta `libnspr4.so`.
+- **Hecho cuando:** pruebas unitarias en verde (235 en total) y e2e escrito. Falta que lo ejecutes tú.
 
 ### F2 · Incendio completo
 - [ ] Fotos (2 por caso); pista salvada nunca arde; mecha con contador a 30 s o menos.
