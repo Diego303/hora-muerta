@@ -5,7 +5,7 @@
 import { carryText, clueText } from '../../../engine/text';
 import type { Room } from '../../../engine/types';
 import { renderPlanLite, type PlanLiteOptions } from '../../../ui/planlite';
-import { BLOCK_NAMES, type BlockIndex, type DayTech, type SessionItem } from '../compose';
+import { BLOCK_NAMES, type BlockIndex, type SessionItem, type SessionPlan } from '../compose';
 import { TECHS } from '../content';
 import { grade, type Grade } from '../grade';
 import { knownTokens } from '../normalize';
@@ -24,10 +24,16 @@ const TRI_OPTIONS: [Tri, string][] = [
   ['NS', 'No se puede saber'],
 ];
 
-function interText(block: BlockIndex, tech: DayTech): [string, string] {
-  if (block === 0) return ['Activación', 'Cinco deducciones rápidas. Lee con calma: aquí no hay reloj.'];
-  if (block === 1) return [TECHS[tech].name, `${TECHS[tech].desc} Cinco ejercicios seguidos de la misma técnica.`];
-  return ['Remate', 'Tres finales de caso. Cuando quedan dos, relee las pistas pensando solo en esos dos, o prueba una hipótesis y busca dónde se rompe.'];
+const COUNT_WORDS = ['Ningún', 'Un', 'Dos', 'Tres', 'Cuatro', 'Cinco', 'Seis', 'Siete', 'Ocho', 'Nueve', 'Diez'];
+const count = (n: number, one: string, many: string): string => `${COUNT_WORDS[n] ?? n} ${n === 1 ? one : many}`;
+
+function interText(block: BlockIndex, plan: SessionPlan, n: number): [string, string] {
+  if (block === 0) {
+    if (plan.kind === 'diagnostico') return ['Diagnóstico', `${count(n, 'ejercicio', 'ejercicios')} de las cuatro técnicas, los más sencillos. Sirven para saber por dónde empezar.`];
+    return ['Activación', `${count(n, 'deducción rápida', 'deducciones rápidas')}. Lee con calma: aquí no hay reloj.`];
+  }
+  if (block === 1) return [TECHS[plan.tech].name, `${TECHS[plan.tech].desc} ${count(n, 'ejercicio', 'ejercicios seguidos')} de la misma técnica.`];
+  return ['Remate', `${count(n, 'final de caso', 'finales de caso')}. Cuando quedan dos, relee las pistas pensando solo en esos dos, o prueba una hipótesis y busca dónde se rompe.`];
 }
 
 function question(drill: Drill): string {
@@ -60,7 +66,9 @@ function gridMarkup(drill: Drill): string {
   return `<h3>Tu tabla</h3><p class="g-note">Opcional: toca las casillas para anotar ✓ o ✗.</p><table class="g-grid"><tr><th></th>${heads}</tr>${rows}</table>`;
 }
 
-export function runSession(root: HTMLElement, items: SessionItem[], tech: DayTech, actions: PlayerActions): () => void {
+export function runSession(root: HTMLElement, plan: SessionPlan, actions: PlayerActions): () => void {
+  const { items } = plan;
+  const blockOrder = [...new Set(items.map((i) => i.block))];
   const results: boolean[] = [];
   let index = 0;
   let pendingInter = true;
@@ -94,13 +102,15 @@ export function runSession(root: HTMLElement, items: SessionItem[], tech: DayTec
   }
 
   function renderInter(block: BlockIndex): void {
-    const [title, text] = interText(block, tech);
-    root.innerHTML = `<div class="wrap gym gym-play">${header(`Bloque ${block + 1} de 3`)}
+    const [title, text] = interText(block, plan, items.filter((i) => i.block === block).length);
+    const pos = blockOrder.indexOf(block) + 1;
+    const label = blockOrder.length > 1 ? `Bloque ${pos} de ${blockOrder.length}` : 'Sesión de remates';
+    root.innerHTML = `<div class="wrap gym gym-play">${header(label)}
       <article class="gcard gym-inter">
-        <p class="gk">Bloque ${block + 1} de 3${block === 1 ? ': técnica del día' : ''}</p>
+        <p class="gk">${label}${block === 1 ? ': técnica del día' : ''}</p>
         <h2 class="big">${title}</h2>
         <p>${text}</p>
-        <button class="btn" id="gGo" type="button">${block === 0 ? 'Empezar' : 'Seguir'}</button>
+        <button class="btn" id="gGo" type="button">${pos === 1 ? 'Empezar' : 'Seguir'}</button>
       </article></div>`;
     wireQuit();
     const go = root.querySelector<HTMLButtonElement>('#gGo');
@@ -140,7 +150,7 @@ export function runSession(root: HTMLElement, items: SessionItem[], tech: DayTec
 
     root.innerHTML = `<div class="wrap gym gym-play">${header(`${BLOCK_NAMES[item.block]}. Ejercicio ${index + 1} de ${items.length}`)}
       <article class="gcard">
-        <p class="gk">${TECHS[drill.tech].name}</p>
+        <p class="gk">${TECHS[drill.tech].name}${item.review ? ' <span class="g-review">· repaso</span>' : ''}</p>
         ${drill.context ? `<p class="gctx">${drill.context}</p>` : ''}
         <h2 class="gq" id="gQ">${question(drill)}</h2>
         ${drill.type === 'tri' ? `<p class="gstmt">${statement(drill)}</p>` : ''}

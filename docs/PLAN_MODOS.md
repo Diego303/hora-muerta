@@ -181,11 +181,11 @@ Cada fase se cierra con `pnpm typecheck`, `pnpm lint`, `pnpm test` (y `pnpm test
 - **Hecho cuando:** criterios 3.13 (4 y 5): 414 pruebas unitarias en verde. Falta que ejecutes el e2e.
 
 ### F5 · Calentamiento adaptativo
-- [ ] `adapt.ts`: niveles (subir con 8 o más de 10; bajar con 4 o menos), técnica del día, diagnóstico la primera vez, repaso de fallados a las 3 sesiones, sin repetir hasta agotar el grupo.
-- [ ] Ficha de detective (barra, nivel y aciertos por técnica) y racha.
-- [ ] "¿Te quedan dos?" en la hoja de acusación, con el protocolo de 5 pasos y el botón Practicar remates (guarda el caso en curso).
-- [ ] Recomendación tras un caso fallado según el arquetipo (tabla 3.10.2).
-- [ ] Pruebas unitarias de `adapt.ts` con historiales sintéticos: subir, bajar, técnica del día y no repetir la del día anterior.
+- [x] `adapt.ts`: niveles (subir con 8 o más de 10; bajar con 4 o menos), técnica del día, diagnóstico la primera vez, repaso de fallados a las 3 sesiones, sin repetir hasta agotar el grupo.
+- [x] Ficha de detective (barra, nivel y aciertos por técnica) y racha.
+- [x] "¿Te quedan dos?" en la hoja de acusación, con el protocolo de 5 pasos y el botón Practicar remates (guarda el caso en curso).
+- [x] Recomendación tras un caso fallado según el arquetipo (tabla 3.10.2).
+- [x] Pruebas unitarias de `adapt.ts` con historiales sintéticos: subir, bajar, técnica del día y no repetir la del día anterior.
 - **Hecho cuando:** criterio 3.13 (3).
 
 ### F6 · Banco de ejercicios generado

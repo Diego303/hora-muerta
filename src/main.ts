@@ -25,6 +25,7 @@ import { renderLanding } from './ui/landing';
 import { linkForCase } from './ui/links';
 import { renderLoading } from './ui/loading';
 import { mountAcademy } from './modes/gym/mount';
+import type { Tech } from './modes/gym/types';
 import { loadFireCases } from './modes/fire/cases';
 import { mountFireCase } from './modes/fire/mount';
 import { renderFireLobby } from './modes/fire/ui/lobby';
@@ -145,13 +146,37 @@ function enterFire(fire: FireCase): void {
   });
 }
 
+/** A qué viene quien entra en la Academia desde un caso (MODOS 3.10): se consume al montarla. */
+let academyFocusOnce: Tech | 'remates' | undefined;
+
+function showAcademy(focus: Tech | 'remates'): void {
+  academyFocusOnce = focus;
+  router.showView('academy');
+}
+
+/** Opciones del tablero que llevan a la Academia, para los casos que se pueden retomar. */
+const ACADEMY_LINKS = {
+  onPracticeRemates: () => showAcademy('remates'),
+  onTrain: (tech: Tech) => showAcademy(tech),
+};
+
 const router = createRouter<AppRoutes>(
   {
     home: screenView(() => mountLanding(), null, () => null),
     game: screenView((route: GameRoute) => route.mount(), (route) => route.mode ?? null, (route) => route.hash),
     fire: fireLobbyView(),
     academy: screenView(
-      () => mountAcademy(app, { onBack: showLanding, onPlayCase: showLandingWithCaseMap }),
+      () => {
+        const focus = academyFocusOnce;
+        academyFocusOnce = undefined;
+        return mountAcademy(app, {
+          onBack: showLanding,
+          onPlayCase: showLandingWithCaseMap,
+          focus,
+          // Desde "Practicar remates" el caso quedó guardado: se puede volver a él.
+          onResumeCase: focus === 'remates' ? () => void resumeGame() : undefined,
+        });
+      },
       null,
       () => 'academia',
     ),
@@ -284,6 +309,7 @@ function showBoard(caseData: CaseDef, bankVersion: string | null, mapFilter: Map
           void nextCase(finished, mapFilter);
         },
         bankVersion,
+        ...(bankVersion !== null ? ACADEMY_LINKS : {}),
       }),
   });
 }
@@ -427,6 +453,7 @@ function showExpedienteNight(series: SeriesDef, progress: SeriesProgress): void 
           void advanceExpediente(series);
         },
         bankVersion: null,
+        ...ACADEMY_LINKS,
       }),
   });
 }
@@ -478,6 +505,11 @@ function showInfiniteBoard(caseData: CaseDef, session: InfiniteSession, diff: Di
           void nextInfiniteCase(session, diff, mapFilter);
         },
         bankVersion: null,
+        // El caso infinito no se retoma, así que no hay "Practicar remates"; la técnica sugerida, sí.
+        onTrain: (tech) => {
+          session.destroy();
+          showAcademy(tech);
+        },
       }),
   });
 }

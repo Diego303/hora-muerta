@@ -879,6 +879,32 @@ li.discarded .discard-btn .name {
   width: 100%;
   justify-content: center;
 }
+/* "¿Te quedan dos?" (MODOS 3.10.1): protocolo plegado bajo el botón de acusar. */
+.two-left {
+  margin-top: 12px;
+  border-top: 1px solid var(--grid);
+}
+.two-left summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.two-left ol {
+  margin: 0 0 10px;
+  padding-left: 1.4em;
+  font-size: 0.95rem;
+}
+.two-left li + li {
+  margin-top: 4px;
+}
+.two-left .btn {
+  width: 100%;
+  justify-content: center;
+}
 
 /* =====================================================================
    Cierre del caso (§14.4).
@@ -927,6 +953,20 @@ li.discarded .discard-btn .name {
 .closure-sheet .chain li {
   margin-bottom: 8px;
   line-height: 1.35;
+}
+/* Técnica sugerida tras fallar una acusación (MODOS 3.10.2). */
+.train-tip {
+  border-left: 4px solid var(--amber);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  padding: 10px 14px;
+  margin: 12px 0;
+}
+.train-tip p {
+  margin: 0 0 8px;
+}
+.train-tip .btn {
+  width: 100%;
+  justify-content: center;
 }
 .closure-sheet #nextCase {
   width: 100%;

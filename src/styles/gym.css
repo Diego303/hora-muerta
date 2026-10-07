@@ -109,6 +109,21 @@
   font-weight: 800;
   font-size: 1.25rem;
 }
+.gym-ficha .ghead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.glevel {
+  font-style: normal;
+  font-weight: 700;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  padding: 1px 8px;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+}
 .gym-ficha li span {
   display: block;
   color: var(--ink-2);
@@ -131,6 +146,30 @@
   display: block;
   height: 100%;
   background: var(--ok);
+}
+
+.gym-first {
+  border-left: 4px solid var(--amber);
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  margin: 0 0 1em;
+  max-width: 30em;
+}
+#gymResume {
+  margin-left: 8px;
+}
+@media (max-width: 420px) {
+  .gym-hero .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  #gymResume {
+    margin: 10px 0 0;
+  }
+}
+.gym-streak {
+  margin: 14px 0 0;
+  color: var(--ink-2);
 }
 
 /* ---------- reproductor ---------- */
@@ -457,6 +496,12 @@
   gap: 12px;
   padding: 9px 0;
   border-bottom: 1px solid var(--grid);
+}
+.g-rows li.up span {
+  font-weight: 700;
+}
+.g-review {
+  font-weight: 400;
 }
 .gym-end .tip {
   border-left: 4px solid var(--amber);

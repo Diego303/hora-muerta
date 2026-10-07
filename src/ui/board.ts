@@ -19,6 +19,8 @@ import { clearSavedGame, loadSavedGame, saveGame } from '../game/session';
 import type { BoardLocks, ChalkColor, GameStore, MarkValue } from '../game/store';
 import { createGameStore, markKey } from '../game/store';
 import { effectiveMoveHelp, getProfile, getSettings, saveProfile } from '../game/storage';
+import { suggestTech } from '../modes/gym/bridge';
+import type { Tech } from '../modes/gym/types';
 import { openAccuseSheet } from './accuse';
 import { setupChalk } from './chalk';
 import { renderCaseTab } from './casetab';
@@ -68,6 +70,11 @@ export interface BoardOptions {
    * plano ya construidos (ui/tutorial.ts lo usa para enganchar el "coach" sin
    * que board.ts sepa nada del tutorial). */
   onReady?: (store: GameStore, plan: PlanHandle, board: BoardHandle) => void;
+  /** "Practicar remates" desde la hoja de acusación (MODOS 3.10.1). Solo donde el
+   * caso se puede retomar: el tablero lo guarda antes de salir. */
+  onPracticeRemates?: () => void;
+  /** Ir a la Academia a practicar la técnica sugerida tras un caso con fallos (MODOS 3.10.2). */
+  onTrain?: (tech: Tech) => void;
 }
 
 function findMap(mapId: CaseDef['map']): MapDef {
@@ -325,11 +332,13 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
       openAccuseSheet(textCtx, store, {
         errorsLabel: `Quedan ${errorsLeft} acusación${errorsLeft === 1 ? '' : 'es'} para todo el expediente.`,
         onOutcome: (outcome) => handleExpedienteOutcome(outcome),
+        onPracticeRemates: practiceRemates,
       });
       return;
     }
     openAccuseSheet(textCtx, store, {
       errorsLabel: fire ? 'Cada acusación errónea resta 30 segundos.' : `Errores: ${store.getState().errors}/2`,
+      onPracticeRemates: fire ? undefined : practiceRemates,
       onOutcome: (outcome) => {
         if (fire) {
           if (outcome.correct) showClosure();
@@ -693,6 +702,15 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
 
   const EXPEDIENTE_NIGHTS = 3;
 
+  /** Undefined donde no hay a dónde volver: el caso se guarda y se retoma con "Volver a tu caso". */
+  const practiceRemates = options.onPracticeRemates
+    ? (): void => {
+        flushSave();
+        cleanup();
+        options.onPracticeRemates?.();
+      }
+    : undefined;
+
   function showClosure(): void {
     const finalState = store.getState();
     cleanup();
@@ -735,7 +753,18 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
       const progress = loadSeriesProgress();
       if (progress) completeNight(progress, computeStars(finalState.errors, finalState.hintsUsed), EXPEDIENTE_NIGHTS);
     }
+    // Tras fallar alguna acusación, la técnica que conviene practicar (MODOS 3.10.2).
+    const suggestion = finalState.errors > 0 && options.onTrain ? suggestTech(caseData.solve.arch) : null;
     closureCleanup = renderClosure(root, map, caseData, textCtx, suspects, store, {
+      suggestion: suggestion
+        ? {
+            ...suggestion,
+            onGo: () => {
+              stopClosure();
+              options.onTrain?.(suggestion.tech);
+            },
+          }
+        : null,
       onNext: () => {
         stopClosure();
         options.onNextCase(caseData);

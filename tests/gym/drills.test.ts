@@ -1,6 +1,6 @@
 // Los 23 ejercicios del prototipo, reverificados por fuerza bruta (docs/MODOS.md 3.8).
 import { describe, expect, it } from 'vitest';
-import { DRILL_GROUPS, DRILLS } from '../../src/modes/gym/drills';
+import { DRILLS } from '../../src/modes/gym/drills';
 import { normalizeDrill } from '../../src/modes/gym/normalize';
 import { SEED_BLOCKS } from '../../src/modes/gym/seed';
 import { computeAnswer, drillErrors } from '../../src/modes/gym/verify';
@@ -8,12 +8,19 @@ import { computeAnswer, drillErrors } from '../../src/modes/gym/verify';
 describe('banco de ejercicios del prototipo', () => {
   it('son 23: 5 de activación, 5 por técnica y 3 remates', () => {
     expect(DRILLS).toHaveLength(23);
-    expect(DRILL_GROUPS.activacion).toHaveLength(5);
-    expect(DRILL_GROUPS.alcance).toHaveLength(5);
-    expect(DRILL_GROUPS.seguro).toHaveLength(5);
-    expect(DRILL_GROUPS.tabla).toHaveLength(5);
-    expect(DRILL_GROUPS.remate).toHaveLength(3);
+    expect(Object.values(SEED_BLOCKS).map((b) => b.length)).toEqual([5, 5, 5, 5, 3]);
     expect(new Set(DRILLS.map((d) => d.drill.id)).size).toBe(23);
+  });
+
+  it('cada ejercicio tiene el nivel de la tabla de MODOS 3.6', () => {
+    const levels = Object.fromEntries(DRILLS.map((d) => [d.drill.id, d.level]));
+    expect(levels).toEqual({
+      a1: 1, a2: 1, a3: 1, a4: 1, a5: 1,
+      t1a: 2, t1b: 1, t1c: 2, t1d: 2, t1e: 1,
+      t2a: 2, t2b: 1, t2c: 2, t2d: 2, t2e: 2,
+      t3a: 2, t3b: 3, t3c: 3, t3d: 1, t3e: 3,
+      r1: 3, r2: 3, r3: 3,
+    });
   });
 
   it.each(DRILLS.map((d) => [d.drill.id, d] as const))('%s: la respuesta guardada es la de la fuerza bruta', (_id, { drill, answer }) => {

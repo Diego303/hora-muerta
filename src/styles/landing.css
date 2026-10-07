@@ -77,6 +77,13 @@
     justify-content: center;
   }
 }
+.warmup {
+  margin: 10px 0 0;
+}
+.warmup .link {
+  min-height: 44px;
+  font-size: 0.95rem;
+}
 .resume {
   margin-top: 18px;
   font-size: 0.95rem;

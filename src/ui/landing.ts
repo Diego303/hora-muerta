@@ -84,6 +84,7 @@ export function renderLanding(root: HTMLElement, options: LandingOptions): () =>
             <a class="btn ghost" href="#niveles">Elegir nivel</a>
             <button class="btn ghost" id="goExpediente">Expediente</button>
           </div>
+          <p class="warmup"><button class="link" data-go="academy">Calienta 5 minutos antes del caso del día</button></p>
           <p class="resume" id="resume" hidden><button class="link" id="resumeBtn"></button></p>
           <button class="rank-chip" id="goProfile2" aria-label="Ver el perfil completo">
             <b>${rank.name}</b><span>${profile.stars} ★${next ? ` · ${starsToNext} para ${next.name}` : ''}</span>

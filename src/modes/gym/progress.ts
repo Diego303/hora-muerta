@@ -1,9 +1,6 @@
-// Progreso del calentamiento en hm2:gym (docs/MODOS.md 3.12) y técnica del día.
-// Funciones puras; la lectura y escritura van al final, siempre con try/catch (storage.ts).
-// F4 rellena `tech` (aciertos, historial) y `sessions`; F5 añade niveles, servicio sin
-// repetir, repaso y racha sobre el mismo esquema, sin migrar.
+// Progreso del calentamiento en hm2:gym (docs/MODOS.md 3.12): esquema y persistencia.
+// Las reglas que lo cambian (niveles, técnica del día, repaso, racha) están en adapt.ts.
 import { readJSON, writeJSON } from '../../game/storage';
-import type { DayTech } from './compose';
 import type { Tech } from './types';
 
 export interface TechProgress {
@@ -12,6 +9,9 @@ export interface TechProgress {
   hist: (0 | 1)[];
   ok: number;
   n: number;
+  /** Respuestas desde el último cambio de nivel. Ampliación del esquema de MODOS 3.12:
+   * "los últimos 10 del nivel actual" no se puede saber solo con `hist`. */
+  atLevel: number;
 }
 
 export interface GymSessionRecord {
@@ -23,54 +23,41 @@ export interface GymSessionRecord {
 
 export interface GymProgress {
   tech: Partial<Record<Tech, TechProgress>>;
+  /** Ejercicios servidos por grupo `${técnica}:${nivel}` desde la última vez que se agotó. */
+  served: Record<string, string[]>;
+  /** Fallados que vuelven como repaso cuando `done` llegue a `due`. */
+  review: { id: string; due: number }[];
+  /** Sesiones completadas en total. Ampliación del esquema: `sessions` se recorta a 30
+   * y no sirve para contar "3 sesiones después". */
+  done: number;
+  streak: { last: string; count: number; best: number };
+  /** Últimas 30 sesiones completadas. */
   sessions: GymSessionRecord[];
 }
 
-export const HIST_SIZE = 20;
-export const SESSIONS_KEPT = 30;
-
 export function emptyProgress(): GymProgress {
-  return { tech: {}, sessions: [] };
+  return { tech: {}, served: {}, review: [], done: 0, streak: { last: '', count: 0, best: 0 }, sessions: [] };
 }
 
 export function techProgress(progress: GymProgress, tech: Tech): TechProgress {
-  return progress.tech[tech] ?? { level: 1, hist: [], ok: 0, n: 0 };
-}
-
-/** Cada respuesta cuenta al momento: si se sale a mitad, lo respondido ya está guardado. */
-export function withAnswer(progress: GymProgress, tech: Tech, ok: boolean): GymProgress {
-  const prev = techProgress(progress, tech);
-  const next: TechProgress = {
-    level: prev.level,
-    hist: [...prev.hist, ok ? (1 as const) : (0 as const)].slice(-HIST_SIZE),
-    ok: prev.ok + (ok ? 1 : 0),
-    n: prev.n + 1,
-  };
-  return { ...progress, tech: { ...progress.tech, [tech]: next } };
-}
-
-export function withSession(progress: GymProgress, record: GymSessionRecord): GymProgress {
-  return { ...progress, sessions: [...progress.sessions, record].slice(-SESSIONS_KEPT) };
-}
-
-const DAY_ORDER: DayTech[] = ['seguro', 'tabla', 'alcance'];
-
-/**
- * Técnica del día, con la regla del prototipo: primero las que no se han practicado
- * (en este orden: seguro, tabla, alcance); después, la de menor acierto (en empate, la
- * menos practicada). F5 la sustituye por la regla completa de MODOS 3.6.
- */
-export function techOfDay(progress: GymProgress): { tech: DayTech; why: string } {
-  const untried = DAY_ORDER.find((t) => techProgress(progress, t).n === 0);
-  if (untried) return { tech: untried, why: 'Todavía no la has practicado.' };
-  const rate = (t: DayTech): number => techProgress(progress, t).ok / techProgress(progress, t).n;
-  const tech = [...DAY_ORDER].sort((a, b) => rate(a) - rate(b) || techProgress(progress, a).n - techProgress(progress, b).n)[0];
-  return { tech, why: `Es tu técnica con menos aciertos (${Math.round(rate(tech) * 100)} %).` };
+  return progress.tech[tech] ?? { level: 1, hist: [], ok: 0, n: 0, atLevel: 0 };
 }
 
 export function loadGymProgress(): GymProgress {
   const saved = readJSON<Partial<GymProgress>>('gym', {});
-  return { ...emptyProgress(), ...saved, tech: { ...saved.tech }, sessions: saved.sessions ?? [] };
+  const empty = emptyProgress();
+  const tech: GymProgress['tech'] = {};
+  for (const [k, v] of Object.entries(saved.tech ?? {}) as [Tech, Partial<TechProgress>][]) {
+    tech[k] = { level: v.level ?? 1, hist: v.hist ?? [], ok: v.ok ?? 0, n: v.n ?? 0, atLevel: v.atLevel ?? v.hist?.length ?? 0 };
+  }
+  return {
+    tech,
+    served: saved.served ?? empty.served,
+    review: saved.review ?? empty.review,
+    done: saved.done ?? saved.sessions?.length ?? 0,
+    streak: saved.streak ?? empty.streak,
+    sessions: saved.sessions ?? empty.sessions,
+  };
 }
 
 export function saveGymProgress(progress: GymProgress): void {
