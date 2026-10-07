@@ -316,6 +316,40 @@ Se pidió el contrato completo de MODOS 1.1 y una prueba que compruebe que al vo
   - Si se quiere más presión en Inspector exprés, la palanca es `FIRE_STEP_S` o el reparto de focos, no las garantías.
 - **Sustituido:** `scripts/build-fire-fixtures.ts` (los dos casos fijos de F1) desaparece; sus pruebas pasan a cubrir el banco entero (`tests/fire/bank.test.ts`).
 
+## Modos: F4 (calentamiento, núcleo)
+
+- **Casa de prácticas (D2):** plano solo de ejercicios (`src/modes/gym/content.ts`), que no entra en el banco de casos. Para no forzar `MapDef` (que exige `w: 12`, `h: 9` y un `MapId` de los seis escenarios) se introduce `FloorPlan` en `engine/types.ts`: lo mínimo para el grafo y el miniplano. Lo cumplen los seis escenarios y la Casa de prácticas, así que `buildGraph` y `planlite` aceptan cualquiera de los dos sin duplicar el grafo. Es solo un cambio de tipos, no de comportamiento.
+- **Reparto y objetos de los ejercicios:** los del prototipo (Bruno, Celia, Dora, Elías; candelabro, cuerda, abrecartas, veneno), con un color fijo por persona. Dora y Elías no están en el reparto del juego; son del calentamiento.
+- **Los 23 ejercicios, portados literalmente** (`src/modes/gym/seed.ts`), con dos formas:
+  - **Forma de autor:** nombres de persona, ids de sala y claves de objeto, como en el prototipo. Las respuestas también van así (`{ type: 'reach', rooms: ['sal', 'coc', 'inv'] }`), de modo que una respuesta no cambia de significado si cambia el orden de una lista.
+  - **Forma normalizada (índices):** la produce `normalize.ts`, que falla con un error claro si un ejercicio cita una sala, persona, objeto o rasgo que no existe.
+- **Reverificación por fuerza bruta (D10 y D13):** `src/modes/gym/verify.ts` enumera todos los escenarios de cada ejercicio (recorridos de una puerta por hora y repartos de objetos), con la regla del crimen cuando la hay, y calcula la respuesta desde cero. En los remates exige exactamente una pista decisiva. Las pistas que no dependen de objetos se comprueban antes de probar repartos, lo que da el mismo resultado mucho más rápido.
+  - `pnpm drills:validate` comprueba los 23 en unos 2 s: **las 23 respuestas del prototipo son correctas también con nuestro motor**, y Casa Valdemar tiene el mismo orden de salas que en el prototipo.
+  - `tests/gym/drills.test.ts` repite la comprobación e incluye un control que cambia una respuesta y verifica que se detecta.
+- **Reglas de error (MODOS 3.5, `grade.ts`):** se aplica la primera que encaje y, si ninguna encaja, solo se muestra la explicación. Interpretaciones:
+  - "Sala de partida": cada "X estaba en S a las H" de lo que se sabe, con H a una hora de la pregunta. La regla de quedarse solo vale para una hora de distancia: el texto de MODOS dice "en una hora".
+  - "Toca sin puerta": las salas comparten pared (no solo esquina) y no hay puerta entre ellas.
+  - "A dos puertas o más": la sala no se alcanza desde **ninguna** hora conocida. El mensaje se adapta al caso ("a tres puertas: no da tiempo en dos horas"); MODOS da el ejemplo de una hora.
+  - "Intersección entre horas": con dos horas conocidas, una sala que encaja con una pero no con la otra. Así las reglas 3 y 5 son disjuntas; si no, la 3 taparía siempre a la 5.
+  - "Rasgo": la sala elegida no cumple un "estaba en una sala con/sin X" de esa persona a esa hora. El texto sale de la etiqueta del rasgo ("no tiene chimenea").
+  - En `clue`, cualquier pista que no sea la decisiva recibe "no cambia nada entre los dos que quedan", porque por construcción hay exactamente una decisiva. En `contra`, cualquier otra recibe "la hipótesis sigue en pie".
+  - **Fuera de la tabla:** el prototipo tenía mensajes propios que MODOS no recoge ("No pudo ser esa opción", "Te faltó X"). No se portan: sin regla, solo explicación, como pide MODOS.
+- **Sesión (MODOS 3.4):** 5 de activación, 5 de la técnica del día y 3 remates, con una pantalla breve antes de cada bloque. En F4 los ejercicios son los fijos del prototipo y la técnica del día usa la regla del prototipo: primero las no practicadas, en orden seguro, tabla, alcance; después, la de menor acierto. F5 la sustituye por la de MODOS 3.6.
+- **Progreso `hm2:gym`:** ya con el esquema de MODOS 3.12 (`tech: { level, hist, ok, n }` y `sessions`), para que F5 no tenga que migrar. **Cada respuesta se guarda al momento**: si sales a mitad, lo respondido cuenta (MODOS 3.4). La sesión completa se apunta al terminar, como mucho las 30 últimas.
+- **Reproductor:**
+  - El miniplano gana puertas (huecos en la pared, hacen falta para contar puertas), nombres de sala, iconos de rasgo (el ejercicio a5 dice "fíjate en los iconos"), la hora bajo cada ficha y un color propio por ficha.
+  - Las salas se tocan o se eligen con Tab y Enter o espacio, con `aria-pressed`.
+  - "Comprobar" solo se activa con una respuesta. En verdadero/falso y en las opciones, el propio botón responde, como en el prototipo.
+  - La corrección dice ✓ Correcto o ✗ No del todo, la pista del error, la explicación y marca el plano: ✓ en las acertadas, borde discontinuo en las que faltaron y ✗ en las sobrantes, más el camino con las puertas numeradas.
+  - Tras corregir, "Siguiente" recibe el foco; al pasar de ejercicio, el foco va al enunciado. La barra de puntos lleva ✓ o ✗ además del color.
+  - La tabla de objetos es opcional, para anotar, y no cuenta para la respuesta.
+- **Color de acierto `--ok`:** el verde del prototipo (`#2f8a57`) no llega a AA en tema claro (3,9:1 sobre el panel). Se usa `#267349` (5,3:1; texto blanco encima 5,8:1). En oscuro se mantiene `#6fd39b`, con texto oscuro encima (8:1).
+- **"Ir a jugar un caso":** vuelve a la portada con el plano de casos ya desplegado (sin la animación de plegado) y a la vista. Lo hace una opción `startOpen` del plano de casos.
+- **Quitado:** la pantalla provisional de F0 (`ui/pending.ts`), que ya no usa ninguna vista.
+- **Pruebas:**
+  - Unitarias: una por cada regla de error, más los casos sin regla, los aciertos y la reverificación de los 23 ejercicios. En total, 52 nuevas del calentamiento y 3 del miniplano.
+  - E2e (`tests/e2e/gym.spec.ts`), en los tres tamaños del proyecto: sesión completa, fallo con su mensaje, salir a mitad y el enlace `#academia`. **No se ejecutan aquí** (falta `libnspr4.so`).
+
 ## Contenido y diseño
 
 - **Corrección de ruta bajo `base: "/hora-muerta/"`.** `Layout.astro` (heredado de la plantilla de Astro) enlazaba `/favicon.svg` y `/favicon.ico` con ruta absoluta; bajo GitHub Pages con `base: "/hora-muerta/"` esos enlaces romperían. Se corrige usando `import.meta.env.BASE_URL` en ambos `<link>`.

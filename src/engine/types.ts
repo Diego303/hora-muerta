@@ -40,6 +40,20 @@ export interface MapDef {
   unlock: Unlock;
 }
 
+/** Lo mínimo de un plano para construir su grafo y dibujarlo: lo cumplen los seis
+ * escenarios (MapDef) y los planos que solo existen para ejercicios, como la "Casa de
+ * prácticas" del calentamiento (docs/MODOS.md, decisión D2). */
+export interface FloorPlan {
+  id: string;
+  name: string;
+  unit: 'sala' | 'vagón';
+  w: number;
+  h: number;
+  features: [FeatureDef, FeatureDef];
+  rooms: RoomDef[];
+  edges: [RoomId, RoomId][];
+}
+
 /** Grafo precalculado a partir de un MapDef (§19.2, graph.ts). */
 export interface Graph {
   adj: number[][];

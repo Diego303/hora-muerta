@@ -72,9 +72,9 @@ test('volver al menú desde cada vista no deja temporizadores, intervalos ni fot
   await expect(page.locator('#goDaily')).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-mode', '');
 
-  // Calentamiento (pantalla provisional de F0).
+  // Calentamiento (la Academia).
   await page.getByRole('button', { name: 'Calentar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Calentamiento' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Prácticas en la Academia' })).toBeVisible();
   await page.getByRole('button', { name: '← Volver al menú' }).click();
   await expect(page.locator('#goDaily')).toBeVisible();
 
@@ -111,7 +111,7 @@ test('los enlaces #incendio, #academia y #tutorial abren su vista directamente',
   await expect(page.locator('html')).toHaveAttribute('data-mode', 'fuego');
 
   await page.goto('./#academia');
-  await expect(page.getByRole('heading', { name: 'Calentamiento' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Prácticas en la Academia' })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-mode', '');
 
   await page.goto('./#tutorial');

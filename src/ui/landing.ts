@@ -33,6 +33,8 @@ export interface LandingOptions {
   onFire: () => void;
   onPlayCase: (caseData: CaseDef, bankVersion: string | null) => void;
   onShowCaseList: () => void;
+  /** Abrir la portada con el plano de casos ya desplegado. */
+  openCaseMap?: boolean;
 }
 
 const ICO_BULB = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -224,7 +226,7 @@ export function renderLanding(root: HTMLElement, options: LandingOptions): () =>
 
   const caseMapHost = root.querySelector<HTMLDivElement>('#caseMapHost');
   const stopCaseMap = caseMapHost
-    ? renderCaseMap(caseMapHost, { onPlay: options.onPlayCase, onShowFullList: options.onShowCaseList })
+    ? renderCaseMap(caseMapHost, { onPlay: options.onPlayCase, onShowFullList: options.onShowCaseList, startOpen: options.openCaseMap })
     : () => undefined;
 
   return () => {

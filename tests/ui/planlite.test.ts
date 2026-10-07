@@ -43,7 +43,7 @@ describe('planLiteMarkup', () => {
     const markup = planLiteMarkup(MANSION, { tokens: [{ c: 0, r: 3 }, { c: 1, r: 3, dashed: true }] });
     expect(count(markup, '<g class="pl-token')).toBe(2);
     expect(markup).toContain('fill="#1f9e8c"');
-    expect(markup).toContain('stroke-dasharray="3 2"');
+    expect(markup).toContain('stroke-dasharray="4 3"');
   });
 
   it('escapa el texto de las etiquetas', () => {
@@ -58,5 +58,25 @@ describe('planLiteMarkup', () => {
     expect(count(markup, 'role="button"')).toBe(MANSION.rooms.length);
     expect(markup).toContain('data-room="2" role="button" tabindex="0" aria-pressed="true"');
     expect(markup).toContain('aria-pressed="false"');
+  });
+});
+
+describe('planLiteMarkup: puertas, nombres y rasgos (calentamiento)', () => {
+  it('dibuja un hueco por cada puerta del plano', () => {
+    expect(count(planLiteMarkup(MANSION, { doors: true }), 'class="pl-door-gap"')).toBe(MANSION.edges.length);
+    expect(planLiteMarkup(MANSION)).not.toContain('pl-door-gap');
+  });
+
+  it('nombra cada sala y pone un icono por rasgo', () => {
+    const markup = planLiteMarkup(MANSION, { labels: true });
+    expect(count(markup, 'class="pl-label"')).toBe(MANSION.rooms.length);
+    const features = MANSION.rooms.reduce((n, r) => n + r.f.length, 0);
+    expect(count(markup, 'class="pl-ficon"')).toBe(features);
+  });
+
+  it('una ficha puede llevar la hora debajo', () => {
+    const markup = planLiteMarkup(MANSION, { tokens: [{ c: 0, r: 0, label: 'B', caption: '22:00' }] });
+    expect(markup).toContain('class="pl-token-caption"');
+    expect(markup).toContain('>22:00</text>');
   });
 });

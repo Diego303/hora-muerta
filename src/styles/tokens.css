@@ -12,6 +12,9 @@
   --blue: #2a64c8;
   --amber: #b87d0c;
   --focus: #2a64c8;
+  /* Acierto (calentamiento): 5,3:1 sobre el panel; texto blanco encima 5,8:1. */
+  --ok: #267349;
+  --on-ok: #ffffff;
 
   --display: 'Big Shoulders Display', 'Arial Narrow', 'Roboto Condensed', Impact, sans-serif;
   --body: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -36,6 +39,8 @@
     --blue: #8cc4ff;
     --amber: #f2c14e;
     --focus: #8cc4ff;
+    --ok: #6fd39b;
+    --on-ok: #0d2a45;
     color-scheme: dark;
   }
 }
@@ -53,6 +58,8 @@
   --blue: #8cc4ff;
   --amber: #f2c14e;
   --focus: #8cc4ff;
+  --ok: #6fd39b;
+  --on-ok: #0d2a45;
   color-scheme: dark;
 }
 

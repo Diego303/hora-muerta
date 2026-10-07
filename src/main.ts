@@ -24,7 +24,7 @@ import { renderHelp } from './ui/help';
 import { renderLanding } from './ui/landing';
 import { linkForCase } from './ui/links';
 import { renderLoading } from './ui/loading';
-import { renderPendingView } from './ui/pending';
+import { mountAcademy } from './modes/gym/mount';
 import { loadFireCases } from './modes/fire/cases';
 import { mountFireCase } from './modes/fire/mount';
 import { renderFireLobby } from './modes/fire/ui/lobby';
@@ -93,25 +93,6 @@ function screenView<P>(
   };
 }
 
-/** Vista provisional: enter no arranca nada, render pinta el texto y leave quita sus escuchas. */
-function pendingView(title: string, text: string, mode: VisualMode, hash: string): ViewDef<undefined> {
-  let stop: (() => void) | null = null;
-  return {
-    mode,
-    hash: () => hash,
-    enter: () => undefined,
-    render: () => {
-      stop?.();
-      stop = renderPendingView(app, { title, text, onBack: showLanding });
-    },
-    leave: () => {
-      const s = stop;
-      stop = null;
-      s?.();
-    },
-  };
-}
-
 /** Vista del Modo Incendio: la lista de edificios. Los casos se cargan al pintarla. */
 function fireLobbyView(): ViewDef<undefined> {
   let stop: (() => void) | null = null;
@@ -169,7 +150,11 @@ const router = createRouter<AppRoutes>(
     home: screenView(() => mountLanding(), null, () => null),
     game: screenView((route: GameRoute) => route.mount(), (route) => route.mode ?? null, (route) => route.hash),
     fire: fireLobbyView(),
-    academy: pendingView('Calentamiento', 'Todavía en construcción.', null, 'academia'),
+    academy: screenView(
+      () => mountAcademy(app, { onBack: showLanding, onPlayCase: showLandingWithCaseMap }),
+      null,
+      () => 'academia',
+    ),
   },
   {
     applyMode: (mode, previous) => applyVisualMode(mode, previous, prefersReducedMotion()),
@@ -184,8 +169,19 @@ function unlockedMapIds(): Set<MapId> {
   return new Set(MAPS.filter((m) => isMapUnlocked(m.unlock, stars)).map((m) => m.id));
 }
 
+/** La próxima vez que se monte la portada, que llegue con el plano de casos desplegado. */
+let openCaseMapOnce = false;
+
+function showLandingWithCaseMap(): void {
+  openCaseMapOnce = true;
+  showLanding();
+}
+
 function mountLanding(): () => void {
+  const openCaseMap = openCaseMapOnce;
+  openCaseMapOnce = false;
   const leave = renderLanding(app, {
+    openCaseMap,
     onStart: (diff, mapFilter) => {
       void startCasual(modeForDiff(diff), mapFilter);
     },

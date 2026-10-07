@@ -63,6 +63,12 @@ function countPhrase(n: number): string {
   return `${COUNT_WORDS[n] ?? n} personas`;
 }
 
+/** "Bruno llevaba el frasco de veneno.": afirmación sobre un portador, que no es un tipo
+ * de pista del juego pero sí un enunciado de los ejercicios del calentamiento. */
+export function carryText(c: Sus, o: Obj, ctx: ClueTextContext): string {
+  return `${who(ctx.suspects[c])} llevaba ${objText(ctx.objects[o])}.`;
+}
+
 /** Texto exacto de una pista (Apéndice B), con los nombres/salas/horas/objetos marcados. */
 export function clueText(clue: Clue, ctx: ClueTextContext): string {
   const suspect = (s: Sus): string => who(ctx.suspects[s]);

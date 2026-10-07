@@ -4,7 +4,7 @@
 // cadena (función pura, comprobable en Node); renderPlanLite solo lo escribe
 // en un <svg> y conecta los toques.
 import { CHIP_COLORS } from '../engine/content/cast';
-import type { MapDef, Room } from '../engine/types';
+import type { FloorPlan, Room } from '../engine/types';
 
 export interface PlanLiteToken {
   c: number;
@@ -12,6 +12,10 @@ export interface PlanLiteToken {
   label?: string;
   /** Ficha de quien no está en la sala (borde discontinuo). */
   dashed?: boolean;
+  /** Texto bajo la ficha, p. ej. la hora ("22:00"). */
+  caption?: string;
+  /** Color propio; si falta, el del índice `c` en la paleta de fichas. */
+  color?: string;
 }
 
 export interface PlanLiteMarks {
@@ -37,6 +41,10 @@ export interface PlanLiteOptions {
   path?: Room[];
   /** Opacidad de calor por sala (índice = Room), de 0 a 1. */
   heat?: number[];
+  /** Puertas dibujadas como huecos en la pared (hace falta para contar puertas). */
+  doors?: boolean;
+  /** Nombre de cada sala y los iconos de sus rasgos (chimenea, ventana...). */
+  labels?: boolean;
 }
 
 const UNIT = 40;
@@ -45,27 +53,27 @@ const INSET = 4;
 const FIRE = '#ff5a1f';
 const VICTIM = '#b3261e';
 
-export function planLiteSize(map: MapDef): { width: number; height: number } {
+export function planLiteSize(map: FloorPlan): { width: number; height: number } {
   return { width: map.w * UNIT + PAD * 2, height: map.h * UNIT + PAD * 2 };
 }
 
-function rectOf(map: MapDef, r: Room): { x: number; y: number; w: number; h: number } {
+function rectOf(map: FloorPlan, r: Room): { x: number; y: number; w: number; h: number } {
   const room = map.rooms[r];
   return { x: PAD + room.x * UNIT + INSET, y: PAD + room.y * UNIT + INSET, w: room.w * UNIT - 2 * INSET, h: room.h * UNIT - 2 * INSET };
 }
 
 /** Centro de una sala en coordenadas del miniplano (para dibujar encima, p. ej. el foco de un incendio). */
-export function planLiteRoomCenter(map: MapDef, r: Room): { x: number; y: number } {
+export function planLiteRoomCenter(map: FloorPlan, r: Room): { x: number; y: number } {
   return centerOf(map, r);
 }
 
-function centerOf(map: MapDef, r: Room): { x: number; y: number } {
+function centerOf(map: FloorPlan, r: Room): { x: number; y: number } {
   const q = rectOf(map, r);
   return { x: q.x + q.w / 2, y: q.y + q.h / 2 };
 }
 
 /** Punto medio de la pared compartida entre dos salas contiguas (la puerta). */
-function doorOf(map: MapDef, a: Room, b: Room): { x: number; y: number } {
+function doorOf(map: FloorPlan, a: Room, b: Room): { x: number; y: number } {
   const A = map.rooms[a];
   const B = map.rooms[b];
   const ox0 = Math.max(A.x, B.x);
@@ -85,7 +93,7 @@ function esc(s: string): string {
 }
 
 /** Marcado del miniplano, sin tocar el DOM. */
-export function planLiteMarkup(map: MapDef, options: PlanLiteOptions = {}): string {
+export function planLiteMarkup(map: FloorPlan, options: PlanLiteOptions = {}): string {
   const selected = new Set(options.selected ?? []);
   const ok = new Set(options.marks?.ok ?? []);
   const miss = new Set(options.marks?.miss ?? []);
@@ -118,6 +126,32 @@ export function planLiteMarkup(map: MapDef, options: PlanLiteOptions = {}): stri
     out += '</g>';
   });
 
+  if (options.doors) {
+    const index = new Map(map.rooms.map((room, i) => [room.id, i]));
+    for (const [a, b] of map.edges) {
+      const ra = index.get(a);
+      const rb = index.get(b);
+      if (ra === undefined || rb === undefined) continue;
+      const d = doorOf(map, ra, rb);
+      const A = map.rooms[ra];
+      const B = map.rooms[rb];
+      const stacked = Math.min(A.x + A.w, B.x + B.w) > Math.max(A.x, B.x);
+      const [w, h] = stacked ? [22, INSET * 2 + 6] : [INSET * 2 + 6, 22];
+      out += `<rect class="pl-door-gap" x="${d.x - w / 2}" y="${d.y - h / 2}" width="${w}" height="${h}" aria-hidden="true"/>`;
+    }
+  }
+
+  if (options.labels) {
+    map.rooms.forEach((room, r) => {
+      const q = rectOf(map, r);
+      out += `<text class="pl-label" x="${q.x + 8}" y="${q.y + 18}" aria-hidden="true">${esc(room.name)}</text>`;
+      room.f.forEach((fid, k) => {
+        const feature = map.features.find((f) => f.id === fid);
+        if (feature) out += `<use class="pl-ficon" href="#ic-${feature.icon}" x="${q.x + 7 + k * 19}" y="${q.y + q.h - 21}" width="15" height="15"><title>${esc(feature.label)}</title></use>`;
+      });
+    });
+  }
+
   if (options.victimRoom !== undefined) {
     const c = centerOf(map, options.victimRoom);
     out += `<g class="pl-victim" aria-hidden="true"><circle cx="${c.x}" cy="${c.y}" r="7" fill="${VICTIM}" stroke="#fff" stroke-width="1.6"/></g>`;
@@ -130,10 +164,13 @@ export function planLiteMarkup(map: MapDef, options: PlanLiteOptions = {}): stri
     perRoom.set(t.r, i + 1);
     const total = tokens.filter((x) => x.r === t.r).length;
     const c = centerOf(map, t.r);
-    const dx = (i - (total - 1) / 2) * 20;
-    const color = CHIP_COLORS[t.c % CHIP_COLORS.length];
-    out += `<g class="pl-token${t.dashed ? ' dashed' : ''}"><circle cx="${c.x + dx}" cy="${c.y}" r="9" fill="${color}" stroke="#fff" stroke-width="1.6"${t.dashed ? ' stroke-dasharray="3 2"' : ''}/>`;
-    out += `<text x="${c.x + dx}" y="${c.y + 4}" text-anchor="middle" class="pl-token-label">${esc(t.label ?? String(t.c + 1))}</text></g>`;
+    const dx = (i - (total - 1) / 2) * (t.caption ? 38 : 20);
+    const cy = t.caption ? c.y - 4 : c.y;
+    const color = t.color ?? CHIP_COLORS[t.c % CHIP_COLORS.length];
+    out += `<g class="pl-token${t.dashed ? ' dashed' : ''}"><circle cx="${c.x + dx}" cy="${cy}" r="${t.caption ? 11 : 9}" fill="${color}" stroke="${t.dashed ? 'currentColor' : '#fff'}" stroke-width="${t.dashed ? 2.4 : 1.6}"${t.dashed ? ' stroke-dasharray="4 3"' : ''}/>`;
+    out += `<text x="${c.x + dx}" y="${cy + 4}" text-anchor="middle" class="pl-token-label">${esc(t.label ?? String(t.c + 1))}</text>`;
+    if (t.caption) out += `<text x="${c.x + dx}" y="${cy + 24}" text-anchor="middle" class="pl-token-caption">${esc(t.caption)}</text>`;
+    out += '</g>';
   }
 
   const path = options.path ?? [];
@@ -150,7 +187,7 @@ export function planLiteMarkup(map: MapDef, options: PlanLiteOptions = {}): stri
 }
 
 /** Pinta el miniplano en un <svg>: marcado, viewBox y, si es seleccionable, toques y teclado. */
-export function renderPlanLite(svg: SVGSVGElement, map: MapDef, options: PlanLiteOptions = {}): void {
+export function renderPlanLite(svg: SVGSVGElement, map: FloorPlan, options: PlanLiteOptions = {}): void {
   const { width, height } = planLiteSize(map);
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
   svg.classList.add('planlite');

@@ -170,15 +170,15 @@ Cada fase se cierra con `pnpm typecheck`, `pnpm lint`, `pnpm test` (y `pnpm test
 - [x] Sala del incendio conectada al banco: orden por jugador, siguiente edificio sin resolver por nivel, resueltos aparte con su mejor marca, escenarios desbloqueados y filtro por nivel.
 - **Hecho cuando:** criterios 2.10 (1 y 2) cumplidos: `pnpm bank:validate` pasa (429 casos) y `tests/fire/bank.test.ts` comprueba los 40.
 
-### F4 · Calentamiento, núcleo
-- [ ] Entrada `#academia` con texto, bloques y botón Empezar el calentamiento.
-- [ ] Reproductor de los 5 tipos (`reach`, `tri`, `pick`, `clue`, `contra`) con `planlite`.
-- [ ] `grade.ts` con las 10 reglas de error de la tabla 3.5; una prueba por regla que provoque el mensaje.
-- [ ] Sesión de 3 bloques (5, 5 y 3) con pantallas intermedias y barra de puntos.
-- [ ] Informe final "N de 13", con "Ir a jugar un caso" (plano desplegado), "Repetir" y "Volver a la Academia".
-- [ ] Los 23 ejercicios portados (D2) y reverificados con el método de D10 (D13).
-- [ ] e2e escrito para móvil y escritorio.
-- **Hecho cuando:** criterios 3.13 (4 y 5).
+### F4 · Calentamiento, núcleo — ✅ hecha
+- [x] Entrada `#academia` con presentación, bloques (técnica del día y motivo), ficha y botón Empezar el calentamiento.
+- [x] Reproductor de los 5 tipos (`reach`, `tri`, `pick`, `clue`, `contra`) con `planlite` (ahora con puertas, nombres, rasgos y hora en las fichas).
+- [x] `grade.ts` con las 10 reglas de error de la tabla 3.5; una prueba por regla que provoca su mensaje.
+- [x] Sesión de 3 bloques (5, 5 y 3) con pantallas intermedias y barra de puntos.
+- [x] Informe final "N de 13", con aciertos por bloque y técnica, consejo, "Ir a jugar un caso" (plano desplegado), "Repetir" y "Volver a la Academia".
+- [x] Los 23 ejercicios portados (D2) y reverificados por fuerza bruta (`pnpm drills:validate`, D10 y D13): las 23 respuestas cuadran.
+- [x] e2e escrito para móvil (vertical y horizontal) y escritorio.
+- **Hecho cuando:** criterios 3.13 (4 y 5): 414 pruebas unitarias en verde. Falta que ejecutes el e2e.
 
 ### F5 · Calentamiento adaptativo
 - [ ] `adapt.ts`: niveles (subir con 8 o más de 10; bajar con 4 o menos), técnica del día, diagnóstico la primera vez, repaso de fallados a las 3 sesiones, sin repetir hasta agotar el grupo.

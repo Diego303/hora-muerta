@@ -254,29 +254,33 @@ svg {
   font-size: 9px;
   fill: var(--ink);
 }
+.pl-door-gap {
+  fill: var(--room);
+}
+.pl-label {
+  font-family: var(--body);
+  font-size: 12px;
+  font-weight: 700;
+  fill: var(--ink-2);
+}
+.pl-ficon {
+  color: var(--ink-2);
+}
+.pl-token-caption {
+  font-family: var(--body);
+  font-size: 10px;
+  font-weight: 700;
+  fill: var(--ink);
+  paint-order: stroke;
+  stroke: var(--room);
+  stroke-width: 3px;
+}
 .pl-token-label {
   font-family: var(--body);
   font-size: 10px;
   font-weight: 700;
   fill: #15222c;
   pointer-events: none;
-}
-
-/* ---------- pantalla provisional (ui/pending.ts) ---------- */
-.pending-body {
-  padding: 40px 0 56px;
-}
-.pending h1 {
-  font-family: var(--display);
-  font-weight: 800;
-  font-size: clamp(2.4rem, 9vw, 4.4rem);
-  line-height: 0.95;
-  margin: 0 0 0.4em;
-}
-.pending p {
-  color: var(--ink-2);
-  font-size: 1.1rem;
-  max-width: 34em;
 }
 
 @media (prefers-reduced-motion: reduce) {

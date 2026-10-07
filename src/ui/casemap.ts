@@ -18,6 +18,8 @@ import { isMapUnlocked } from '../game/progression';
 export interface CaseMapOptions {
   onPlay: (caseData: CaseDef, bankVersion: string | null) => void;
   onShowFullList: () => void;
+  /** Llegar con el plano ya desplegado y a la vista (p. ej. "Ir a jugar un caso" desde la Academia). */
+  startOpen?: boolean;
 }
 
 function requireEl<T extends Element>(root: ParentNode, selector: string): T {
@@ -333,6 +335,12 @@ export function renderCaseMap(root: HTMLElement, options: CaseMapOptions): () =>
 
   layout();
   renderAll();
+  if (options.startOpen) {
+    // Sin la animación del plegado: se llega con el plano ya abierto.
+    state = 'opening';
+    finishOpen();
+    root.scrollIntoView({ block: 'start' });
+  }
 
   return () => {
     disposed = true;
