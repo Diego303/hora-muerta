@@ -261,6 +261,12 @@ export interface BuildCaseOptions {
    * y mismo reparto de 5 en las tres noches; la de Novato usa los 4 primeros.
    */
   castOverride?: number[];
+  /**
+   * Tope estricto de pistas servidas (Modo Incendio, "Inspector exprés": 9 como
+   * mucho, docs/MODOS.md 2.5). Sin él se aplica el de la dificultad, que a partir
+   * del tercer intento tolera pasarse.
+   */
+  maxClues?: number;
 }
 
 export function buildCaseCandidate(seed: string, diff: DiffIndex, mapId?: MapId, options?: BuildCaseOptions): CaseDraft | null {
@@ -323,6 +329,8 @@ export function buildCaseCandidate(seed: string, diff: DiffIndex, mapId?: MapId,
       );
       clues = clues.concat(courtesyCandidates.slice(0, params.courtesyClues));
     }
+
+    if (options?.maxClues !== undefined && clues.length > options.maxClues) continue;
 
     // El presupuesto de lectura (§6.3) se mide sobre las pistas que de verdad
     // se sirven, incluida la de cortesía: si se midiera antes de añadirla (como

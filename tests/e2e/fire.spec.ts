@@ -2,16 +2,20 @@
 // simula con page.clock: los 300 s del edificio pasan en milisegundos.
 import { expect, test, type Page } from '@playwright/test';
 
-interface FixtureFile {
-  cases: { caseData: { culprit: number; weapon: number; N: number } }[];
+interface FireBankFile {
+  cases: { caseData: { id: string; culprit: number; weapon: number; N: number } }[];
 }
 
-async function enterFirstBuilding(page: Page): Promise<void> {
+/** Entra en el primer edificio que ofrece la sala y devuelve su id. */
+async function enterFirstBuilding(page: Page): Promise<string> {
   await page.clock.install();
   await page.goto('./#incendio');
   await expect(page.locator('html')).toHaveAttribute('data-mode', 'fuego');
-  await page.getByRole('button', { name: 'Entrar en el edificio' }).first().click();
+  const button = page.getByRole('button', { name: 'Entrar en el edificio' }).first();
+  const id = (await button.getAttribute('data-case-id')) ?? '';
+  await button.click();
   await expect(page.locator('#fireClock')).toHaveText('5:00');
+  return id;
 }
 
 async function accuseWrong(page: Page, culprit: number, weapon: number, n: number): Promise<void> {
@@ -55,9 +59,11 @@ test('al llegar a 0:00 el edificio se derrumba y se puede volver a entrar con el
 });
 
 test('una acusación errónea resta 30 segundos, y si agota el tiempo el derrumbe es inmediato', async ({ page, request }) => {
-  const data = (await (await request.get('./cases/incendio.json')).json()) as FixtureFile;
-  const { culprit, weapon, N } = data.cases[0].caseData;
-  await enterFirstBuilding(page);
+  const data = (await (await request.get('./cases/incendio.json')).json()) as FireBankFile;
+  const id = await enterFirstBuilding(page);
+  const entered = data.cases.find((c) => c.caseData.id === id);
+  if (!entered) throw new Error(`Edificio ${id} no está en el banco`);
+  const { culprit, weapon, N } = entered.caseData;
 
   await page.clock.runFor(10_000);
   await expect(page.locator('#fireClock')).toHaveText('4:50');

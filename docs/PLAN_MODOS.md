@@ -159,16 +159,16 @@ Cada fase se cierra con `pnpm typecheck`, `pnpm lint`, `pnpm test` (y `pnpm test
 - [x] Casos límite de 2.9: penalización por debajo de cero (F1), foto sobre pista ardiendo, pista enfocada que se quema, reinicio al volver a entrar, capa de fuego también en el plano ampliado.
 - **Hecho cuando:** 263 pruebas unitarias en verde; e2e y capturas escritos (`tests/e2e/fire-complete.spec.ts`). Falta que los ejecutes tú: `pnpm test:e2e`, y las capturas quedan en `test-results/`.
 
-### F3 · Incendio en el banco
-- [ ] Grupo `incendio` en `bank.config.ts`: 20 Novato y 20 Inspector exprés (tope de 9 pistas).
-- [ ] Foco determinista según 2.5.2, con los desempates de D9 una vez definida la distancia intermedia.
-- [ ] `ign` y `burnAt` precalculados.
-- [ ] Causas por sala y título "{Lugar} en llamas" (D7).
-- [ ] Garantías de 2.5 en `validate-bank`, incluida la solubilidad de D1.
-- [ ] Generación con `generateGroup()` (solo este grupo). Informe: distribución de focos, porcentaje de pistas quemadas por minuto y rechazos por cada garantía.
-- [ ] `public/cases/incendio.json` y `manifest.json` actualizados.
-- [ ] Servicio sin repetir y filtro por nivel en la sala del incendio.
-- **Hecho cuando:** criterios 2.10 (1 y 2). Depende de la decisión D1.
+### F3 · Incendio en el banco — ✅ hecha
+- [x] Grupo `incendio` en `bank.config.ts`: 20 Novato y 20 Inspector exprés (tope estricto de 9 pistas con la nueva opción `maxClues`).
+- [x] Foco determinista según 2.5.2, con desempate por pistas en salas de distancia intermedia (D9) y después por índice.
+- [x] `ign` y `burnAt` precalculados.
+- [x] Una causa por cada una de las 50 salas y título "{Lugar} en llamas".
+- [x] Garantías de 2.5 en `validate-bank` (la opcional de calibración no se aplica, ver DECISIONES.md).
+- [x] Generación solo de este grupo (`scripts/build-fire-bank.ts`), en paralelo por huecos con el mismo resultado que en serie (16 min con 15 procesos), e informe en `reports/fire-report.md`.
+- [x] `public/cases/incendio.json` (40 casos) y `manifest.json` actualizados.
+- [x] Sala del incendio conectada al banco: orden por jugador, siguiente edificio sin resolver por nivel, resueltos aparte con su mejor marca, escenarios desbloqueados y filtro por nivel.
+- **Hecho cuando:** criterios 2.10 (1 y 2) cumplidos: `pnpm bank:validate` pasa (429 casos) y `tests/fire/bank.test.ts` comprueba los 40.
 
 ### F4 · Calentamiento, núcleo
 - [ ] Entrada `#academia` con texto, bloques y botón Empezar el calentamiento.

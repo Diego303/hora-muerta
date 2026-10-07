@@ -43,3 +43,24 @@ export const MAP_QUOTA_TOLERANCE = 2; // ±2 casos entre los 6 mapas
 export const MAX_ARCHETYPE_SHARE = 0.3; // ningún arquetipo por encima del 30%
 export const MIN_ARCHETYPE_SHARE = 0.08; // cada arquetipo disponible, al menos el 8%
 export const MAX_CRIME_HOUR_SHARE = 0.45; // ninguna hora del crimen por encima del 45%
+
+/** Grupo "incendio" (docs/MODOS.md 2.5): 20 Novato y 20 Inspector exprés (5
+ * sospechosos, 3 horas, 9 pistas como mucho). Cada hueco se reintenta hasta
+ * encontrar un caso que cumpla todas las garantías de justicia. */
+export interface FireGroupConfig {
+  level: 'Novato' | 'Inspector exprés';
+  mode: 'novato' | 'inspector';
+  diff: 0 | 1;
+  count: number;
+  idPrefix: string;
+  maxClues?: number;
+}
+
+export const FIRE_GROUPS: FireGroupConfig[] = [
+  { level: 'Novato', mode: 'novato', diff: 0, count: 20, idPrefix: 'INC-N' },
+  { level: 'Inspector exprés', mode: 'inspector', diff: 1, count: 20, idPrefix: 'INC-I', maxClues: 9 },
+];
+
+/** Reintentos por hueco del incendio: más que en el banco normal, porque las
+ * garantías de justicia rechazan alrededor de un tercio de los casos válidos. */
+export const FIRE_MAX_RETRIES_PER_SLOT = 16;

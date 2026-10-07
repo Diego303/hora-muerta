@@ -29,6 +29,7 @@ import { loadFireCases } from './modes/fire/cases';
 import { mountFireCase } from './modes/fire/mount';
 import { renderFireLobby } from './modes/fire/ui/lobby';
 import { loadFireRecords } from './modes/fire/records';
+import { fireOffers, fireOrder } from './modes/fire/serve';
 import { startEmbers } from './modes/fire/theme/embers';
 import type { FireCase } from './modes/fire/types';
 import { renderProfile } from './ui/profile';
@@ -125,9 +126,12 @@ function fireLobbyView(): ViewDef<undefined> {
       const mine = ++token;
       app.innerHTML = '<p class="fire-loading">Cargando…</p>';
       loadFireCases()
-        .then((cases) => {
+        .then((bank) => {
           if (mine !== token) return;
-          const leaveLobby = renderFireLobby(app, cases, loadFireRecords(), { onEnter: enterFire, onBack: showLanding });
+          const records = loadFireRecords();
+          const ordered = fireOrder(bank.cases, `${getOrderSeed()}|incendio|${bank.version}`);
+          const offers = fireOffers(ordered, records, unlockedMapIds());
+          const leaveLobby = renderFireLobby(app, offers, records, { onEnter: enterFire, onBack: showLanding });
           const stopEmbers = startEmbers(() => 0.12);
           stop = () => {
             stopEmbers();

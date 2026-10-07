@@ -5,7 +5,8 @@
     "inspector": 164,
     "comisario": 0,
     "diario": 55,
-    "expediente": 0
+    "expediente": 0,
+    "incendio": 40
   },
   "files": {
     "novato.json": {
@@ -27,6 +28,10 @@
     "expedientes.json": {
       "count": 0,
       "hash": "183pn0b"
+    },
+    "incendio.json": {
+      "count": 40,
+      "hash": "byqufd"
     }
   }
 }

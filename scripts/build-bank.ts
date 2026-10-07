@@ -18,6 +18,8 @@ import { buildCaseCandidate, draftToCaseDef } from '../src/engine/generate';
 import { fnv1a, rngFromSeed, shuffle } from '../src/engine/rng';
 import type { CaseDef, CaseMode, MapId, SeriesDef } from '../src/engine/types';
 import { BANK_GROUPS, BANK_VERSION, EXPEDIENTE_ID_PREFIX, EXPEDIENTE_SERIES_COUNT } from './bank.config';
+import { buildFireReport, generateFireGroup } from './fire-bank';
+import { createSlotRunner } from './fire-parallel';
 
 const OUT_DIR = path.join(process.cwd(), 'public', 'cases');
 const MAP_IDS: MapId[] = MAPS.map((m) => m.id);
@@ -95,7 +97,7 @@ function generateExpedientes(seenSignatures: Set<string>): SeriesDef[] {
   return series;
 }
 
-function main(): void {
+async function main(): Promise<void> {
   console.time('[build-bank] tiempo total');
   mkdirSync(OUT_DIR, { recursive: true });
   const seenSignatures = new Set<string>();
@@ -119,6 +121,22 @@ function main(): void {
   manifestFiles['expedientes.json'] = { count: series.length, hash: fnv1a(expedienteContents).toString(36) };
   console.log(`[build-bank] expediente: ${series.length}/${EXPEDIENTE_SERIES_COUNT} series escritas.`);
 
+  // Modo Incendio (docs/MODOS.md 2.5): va el último para no repetir ningún caso de los demás grupos.
+  const runner = createSlotRunner();
+  let fire: Awaited<ReturnType<typeof generateFireGroup>>;
+  try {
+    fire = await generateFireGroup(seenSignatures, runner.runSlots, runner.batchSize);
+  } finally {
+    runner.dispose();
+  }
+  const fireContents = JSON.stringify({ version: BANK_VERSION, stats: fire.stats, cases: fire.cases });
+  writeFileSync(path.join(OUT_DIR, 'incendio.json'), fireContents);
+  manifestCounts.incendio = fire.cases.length;
+  manifestFiles['incendio.json'] = { count: fire.cases.length, hash: fnv1a(fireContents).toString(36) };
+  mkdirSync(path.join(process.cwd(), 'reports'), { recursive: true });
+  writeFileSync(path.join(process.cwd(), 'reports', 'fire-report.md'), `${buildFireReport(fire.cases, fire.stats)}\n`);
+  console.log(`[build-bank] incendio: ${fire.cases.length} casos escritos.`);
+
   const manifest = { version: BANK_VERSION, counts: manifestCounts, files: manifestFiles };
   writeFileSync(path.join(OUT_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2));
   console.log('[build-bank] manifest.json escrito.');
@@ -127,4 +145,9 @@ function main(): void {
 
 // Solo al ejecutarse directamente (`pnpm bank:build`), no al importar
 // `generateGroup` desde otro script (p. ej. para regenerar un único grupo).
-if (fileURLToPath(import.meta.url) === process.argv[1]) main();
+if (fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((error: unknown) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}

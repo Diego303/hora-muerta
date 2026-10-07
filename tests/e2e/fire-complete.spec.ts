@@ -3,12 +3,16 @@
 // tamaño del proyecto (390 × 844 y 1280 × 800, más el horizontal de móvil).
 import { expect, test, type Page } from '@playwright/test';
 
-interface FixtureFile {
-  cases: { caseData: { id: string; culprit: number; weapon: number }; fire: { burnAt: number[] } }[];
+interface FireBankCase {
+  caseData: { id: string; culprit: number; weapon: number };
+  fire: { burnAt: number[]; level: string };
 }
 
-async function fixtures(page: Page): Promise<FixtureFile> {
-  return (await (await page.request.get('./cases/incendio.json')).json()) as FixtureFile;
+async function bankCase(page: Page, id: string): Promise<FireBankCase> {
+  const data = (await (await page.request.get('./cases/incendio.json')).json()) as { cases: FireBankCase[] };
+  const found = data.cases.find((c) => c.caseData.id === id);
+  if (!found) throw new Error(`Edificio ${id} no está en el banco`);
+  return found;
 }
 
 async function openLobby(page: Page): Promise<void> {
@@ -17,9 +21,13 @@ async function openLobby(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Modo Incendio' })).toBeVisible();
 }
 
-async function enter(page: Page, index = 0): Promise<void> {
-  await page.getByRole('button', { name: 'Entrar en el edificio' }).nth(index).click();
+/** Entra en el edificio ofrecido en la posición dada y devuelve su id. */
+async function enter(page: Page, index = 0): Promise<string> {
+  const button = page.getByRole('button', { name: 'Entrar en el edificio' }).nth(index);
+  const id = (await button.getAttribute('data-case-id')) ?? '';
+  await button.click();
   await expect(page.locator('#fireClock')).toHaveText('5:00');
+  return id;
 }
 
 async function accuse(page: Page, culprit: number, weapon: number): Promise<void> {
@@ -35,16 +43,18 @@ async function showClues(page: Page): Promise<void> {
   if (await tab.isVisible()) await tab.click();
 }
 
-test('la sala del incendio enseña reglas, filtro y una tarjeta por edificio con calor y mejor marca', async ({ page }, info) => {
+test('la sala del incendio ofrece un edificio por nivel, con reglas, filtro, calor y progreso', async ({ page }, info) => {
   await openLobby(page);
   await expect(page.locator('.fire-rules li')).toHaveCount(5);
   await expect(page.locator('.fcard')).toHaveCount(2);
   await expect(page.locator('.fcard .fire-preview').first()).toBeVisible();
   await expect(page.locator('.fcard .best').first()).toHaveText('Todavía sin resolver.');
+  await expect(page.locator('.fire-level-h').first()).toContainText('Resueltos: 0 de');
 
   await page.getByRole('button', { name: 'Inspector exprés', exact: true }).click();
   await expect(page.locator('.fcard:visible')).toHaveCount(1);
-  await expect(page.locator('.fcard:visible h2')).toHaveText('Museo Aldana en llamas');
+  await expect(page.locator('.fcard:visible .lv')).toHaveText('Inspector exprés');
+  await expect(page.locator('.fcard:visible h4')).toHaveText(/ en llamas$/);
   await page.getByRole('button', { name: 'Todos', exact: true }).click();
   await expect(page.locator('.fcard:visible')).toHaveCount(2);
 
@@ -54,14 +64,12 @@ test('la sala del incendio enseña reglas, filtro y una tarjeta por edificio con
 });
 
 test('fotos: una pista salvada no arde y la de una pista que ya arde se rechaza', async ({ page }) => {
-  const data = await fixtures(page);
-  const burnAt = data.cases[0].fire.burnAt;
+  await openLobby(page);
+  const { fire } = await bankCase(page, await enter(page));
+  const burnAt = fire.burnAt;
   // Pista que arde antes (con sala) y otra que arde después, para salvarla.
   const early = burnAt.indexOf(Math.min(...burnAt));
   const keep = burnAt.findIndex((at, i) => i !== early && at > burnAt[early]);
-
-  await openLobby(page);
-  await enter(page);
   await showClues(page);
   await expect(page.locator('.fire-photos')).toHaveText('2 fotos para salvar pistas');
 
@@ -89,11 +97,10 @@ test('fotos: una pista salvada no arde y la de una pista que ya arde se rechaza'
   await expect(page.locator(`.clue-row[data-i="${keep}"] .clue-text`)).toBeVisible();
 });
 
-test('caso resuelto: medallas, tiempo sobrante, récord en hm2:fire y mejor marca en la sala', async ({ page }, info) => {
-  const data = await fixtures(page);
-  const { id, culprit, weapon } = data.cases[0].caseData;
+test('caso resuelto: medallas, récord en hm2:fire, mejor marca y el siguiente edificio sin repetir', async ({ page }, info) => {
   await openLobby(page);
-  await enter(page);
+  const id = await enter(page);
+  const { culprit, weapon } = (await bankCase(page, id)).caseData;
 
   // Un rato dentro, con la línea de estado y el fuego ya en marcha (captura en partida).
   await page.clock.runFor(70_000);
@@ -117,9 +124,17 @@ test('caso resuelto: medallas, tiempo sobrante, récord en hm2:fire y mejor marc
   await expect(page.locator('#reconMap')).toBeVisible();
   await page.keyboard.press('Escape');
 
-  // De vuelta en la sala, la tarjeta enseña la mejor marca.
+  // De vuelta en la sala: ese edificio ya no se ofrece (sin repetir); aparece en
+  // "Edificios resueltos" con su mejor marca, y el nivel ofrece otro distinto.
   await page.getByRole('button', { name: 'Volver al Modo Incendio' }).click();
-  await expect(page.locator('.fcard .best').first()).toContainText('te sobraron 3:50');
+  const level = page.locator('.fire-level').first();
+  await expect(level.locator('.fire-level-h')).toContainText('Resueltos: 1 de');
+  const next = await level.locator('> .fcard [data-case-id]').getAttribute('data-case-id');
+  expect(next).not.toBe(id);
+  await level.locator('.fire-solved summary').click();
+  const solvedCard = level.locator(`.fire-solved [data-case-id="${id}"]`);
+  await expect(solvedCard).toBeVisible();
+  await expect(level.locator('.fire-solved .best').first()).toContainText('te sobraron 3:50');
 });
 
 test('derrumbe: Ver la solución enseña el veredicto y la noche', async ({ page }) => {

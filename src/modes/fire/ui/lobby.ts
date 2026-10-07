@@ -1,12 +1,14 @@
 // Sala del incendio (#incendio, docs/MODOS.md 2.6): título, presentación, las cinco
-// reglas, filtro por nivel y una tarjeta por edificio con su miniplano de calor,
-// nivel, título, introducción, datos del caso, tu mejor marca y el botón de entrar.
+// reglas, filtro por nivel y, por nivel, el siguiente edificio sin resolver (servicio
+// sin repetir) más los ya resueltos para mejorar la marca. Cada tarjeta lleva el
+// miniplano de calor, nivel, título, presentación, datos del caso y tu mejor marca.
 import { MAPS } from '../../../engine/content/maps';
 import { buildGraph } from '../../../engine/graph';
 import { planLiteMarkup, planLiteRoomCenter, planLiteSize } from '../../../ui/planlite';
 import { recordOf, type FireRecords } from '../records';
 import { clockText } from '../status';
 import { doorDistances, previewHeat } from '../timeline';
+import type { FireOffer } from '../serve';
 import type { FireCase, FireData } from '../types';
 
 export interface FireLobbyActions {
@@ -49,31 +51,51 @@ export function heatPreview(fire: FireCase): string {
   return `<svg class="planlite fire-preview" viewBox="0 0 ${width} ${height}" aria-hidden="true">${planLiteMarkup(map, { heat })}${flame}</svg>`;
 }
 
-function card(fire: FireCase, index: number, records: FireRecords): string {
+function card(fire: FireCase, records: FireRecords): string {
   const map = MAPS.find((m) => m.id === fire.caseData.map);
   const origin = map?.rooms[fire.fire.origin]?.name ?? '';
   const record = recordOf(records, fire.caseData.id);
   const best = record.bestLeft !== null ? `Tu mejor marca: te sobraron <b>${clockText(record.bestLeft)}</b>.` : 'Todavía sin resolver.';
   return `
-    <article class="fcard" data-level="${esc(fire.fire.level)}">
+    <article class="fcard">
       ${heatPreview(fire)}
       <div class="fcard-body">
         <span class="lv">${esc(fire.fire.level)}</span>
-        <h2>${esc(fire.fire.title)}</h2>
+        <h4>${esc(fire.fire.title)}</h4>
         <p>${esc(fire.fire.intro)}</p>
         <p class="meta">Foco: ${esc(origin)}. ${fire.caseData.N} sospechosos, ${fire.caseData.T} horas, ${fire.caseData.clues.length} pistas.</p>
         <p class="best">${best}</p>
-        <button class="btn danger" type="button" data-fire="${index}">Entrar en el edificio</button>
+        <button class="btn danger" type="button" data-case-id="${esc(fire.caseData.id)}">Entrar en el edificio</button>
       </div>
     </article>`;
 }
 
-export function renderFireLobby(root: HTMLElement, cases: FireCase[], records: FireRecords, actions: FireLobbyActions): () => void {
+function levelSection(offer: FireOffer, records: FireRecords, index: number): string {
+  const solvedCount = offer.solved.length;
+  const next = offer.next
+    ? card(offer.next, records)
+    : `<p class="fire-done">Has resuelto los ${offer.total} edificios de este nivel. Puedes volver a entrar en cualquiera para mejorar tu marca.</p>`;
+  const solved =
+    solvedCount > 0
+      ? `<details class="fire-solved"><summary>Edificios resueltos (${solvedCount})</summary><div class="fire-cases">${offer.solved.map((c) => card(c, records)).join('')}</div></details>`
+      : '';
+  return `
+    <section class="fire-level" data-level="${esc(offer.level)}" aria-labelledby="fireLevel${index}">
+      <h3 class="fire-level-h" id="fireLevel${index}">${esc(offer.level)} <span>Resueltos: ${solvedCount} de ${offer.total}</span></h3>
+      ${next}
+      ${solved}
+    </section>`;
+}
+
+export function renderFireLobby(root: HTMLElement, offers: FireOffer[], records: FireRecords, actions: FireLobbyActions): () => void {
   const filters: { id: LevelFilter; label: string }[] = [
     { id: 'all', label: 'Todos' },
     { id: 'Novato', label: 'Novato' },
     { id: 'Inspector exprés', label: 'Inspector exprés' },
   ];
+  const byId = new Map<string, FireCase>();
+  for (const offer of offers) for (const c of [offer.next, ...offer.solved]) if (c) byId.set(c.caseData.id, c);
+
   root.innerHTML = `
     <div class="wrap fire-lobby">
       <header class="top">
@@ -88,25 +110,25 @@ export function renderFireLobby(root: HTMLElement, cases: FireCase[], records: F
       </section>
       <h2 class="fire-h2">Elige el edificio</h2>
       <div class="pick fire-filter" role="group" aria-label="Nivel">
-        ${filters.map((f) => `<button class="chip" type="button" data-level="${esc(f.id)}" aria-pressed="${f.id === 'all'}">${f.label}</button>`).join('')}
+        ${filters.map((f) => `<button class="chip" type="button" data-filter="${esc(f.id)}" aria-pressed="${f.id === 'all'}">${f.label}</button>`).join('')}
       </div>
-      <div class="fire-cases">${cases.map((c, i) => card(c, i, records)).join('')}</div>
+      <div class="fire-offers">${offers.map((o, i) => levelSection(o, records, i)).join('')}</div>
     </div>`;
 
   root.querySelector('#fireBack')?.addEventListener('click', () => actions.onBack());
-  root.querySelectorAll<HTMLButtonElement>('[data-fire]').forEach((button) => {
+  root.querySelectorAll<HTMLButtonElement>('[data-case-id]').forEach((button) => {
     button.addEventListener('click', () => {
-      const fire = cases[Number(button.dataset.fire)];
+      const fire = byId.get(button.dataset.caseId ?? '');
       if (fire) actions.onEnter(fire);
     });
   });
-  const chips = Array.from(root.querySelectorAll<HTMLButtonElement>('.fire-filter [data-level]'));
+  const chips = Array.from(root.querySelectorAll<HTMLButtonElement>('.fire-filter [data-filter]'));
   chips.forEach((chip) => {
     chip.addEventListener('click', () => {
-      const level = chip.dataset.level ?? 'all';
+      const level = chip.dataset.filter ?? 'all';
       chips.forEach((c) => c.setAttribute('aria-pressed', String(c === chip)));
-      root.querySelectorAll<HTMLElement>('.fcard').forEach((cardEl) => {
-        cardEl.hidden = level !== 'all' && cardEl.dataset.level !== level;
+      root.querySelectorAll<HTMLElement>('.fire-level').forEach((section) => {
+        section.hidden = level !== 'all' && section.dataset.level !== level;
       });
     });
   });

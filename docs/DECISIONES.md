@@ -280,6 +280,42 @@ Se pidió el contrato completo de MODOS 1.1 y una prueba que compruebe que al vo
 - **Contraste AA:** `tests/fire/contrast.test.ts` lee la paleta de fuego directamente de `tokens.css` y comprueba cada combinación que usa el modo: texto principal y secundario sobre las tres superficies; brasa y llama como texto; texto oscuro sobre brasa (botones, reloj del último minuto, "Ardiendo") y sobre llama (mecha, medalla); la línea de estado sobre su fondo teñido; y bordes de control, paredes y foco a 3:1. Todo pasa. Si alguien cambia un color, la prueba lo detecta.
 - **Pruebas:** 28 unitarias nuevas (medallas, estrellas y récords, línea de estado, fotos, calor de la vista previa y contraste) y dos ficheros e2e: `fire-complete.spec.ts` (sala, fotos y quemado, caso resuelto con medallas y récord, derrumbe con Ver la solución, y capturas en 390 × 844, 844 × 390 y 1280 × 800 vía los tres proyectos de Playwright) y el ajuste de `fire.spec.ts` (salir pide confirmación). **No se ejecutan aquí** (Chromium sin `libnspr4.so`). Las capturas quedan en `test-results/` cuando lo ejecutes.
 
+## Modos: F3 (incendio en el banco)
+
+- **Grupo `incendio`** (`scripts/bank.config.ts#FIRE_GROUPS`, `scripts/fire-bank.ts`): 20 Novato y 20 Inspector exprés con la tubería normal de cada dificultad. Inspector exprés lleva un tope **estricto** de 9 pistas, nueva opción `maxClues` de `buildCaseCandidate`: descarta el intento antes del solver humano, que es lo caro. Sin esa opción el generador tolera pasarse del máximo a partir del tercer intento, y solo el 25 % de los casos Inspector publicados tiene 9 pistas o menos. Los demás grupos no la usan, así que el resto del banco sale idéntico.
+- **Huecos:** cada hueco rota escenario (`slot % 6`) y se reintenta hasta 16 veces con semillas `BANK_VERSION|incendio|modo|hueco|reintento`. Si un hueco se agota, se pasa al siguiente (otro escenario) hasta llenar el cupo, con un tope de 3 × cupo huecos. Por eso el reparto de escenarios puede no ser exactamente uniforme.
+- **Generación en paralelo, con el mismo resultado:** en serie, Inspector exprés tardaba unos 2 minutos por hueco (más de una hora el grupo).
+  - Cada hueco es una función pura (`generateFireSlot`) de (grupo, hueco, firmas ya publicadas). No mira lo aceptado en otros huecos del mismo grupo. Los repetidos dentro del grupo se resuelven al juntar en orden de hueco: el posterior cuenta como hueco vacío.
+  - Los huecos se lanzan por tandas en procesos hijos (`scripts/fire-parallel.ts` y `fire-slot-worker.ts`): uno por hueco, tantos a la vez como núcleos menos uno, o los que diga `FIRE_JOBS`. Son procesos y no hilos porque cada hijo arranca con el mismo cargador tsx que el padre, que es lo fiable aquí (ver la nota de M3 sobre `worker_threads`).
+  - Los huecos calculados de más en la última tanda se descartan sin contar en las cifras, así que **casos e informe son idénticos con 1 o con 16 trabajos**. Lo cubre `tests/fire/generation.test.ts` (tandas de 1, 2, 4, 7 y 16) y se comprobó que un hueco generado en un proceso hijo sale idéntico al generado en el propio proceso.
+  - Si el padre no corre con tsx, o `FIRE_JOBS=1`, se genera en el propio proceso.
+- **Foco (MODOS 2.5.2 y D9):** la sala más alejada en puertas de la escena. En empate, la que tenga más pistas ancladas a salas de **distancia intermedia** desde ella. Defino distancia intermedia como entre 1 y "la más lejana desde ese foco menos 1": ni el propio foco ni lo último en arder. Después, el índice. `chooseOrigin` es pura y la usan el generador, el validador y las pruebas.
+- **Garantías (MODOS 2.5.4)** en `src/modes/fire/fairness.ts`, con los números de MODOS:
+  - **foco:** a 2 puertas o más de la escena.
+  - **lectura:** cada pista arde a los 90 s o más.
+  - **ritmo:** arde antes de 2:30 como mucho el 40 % de las pistas. Arder exactamente a 2:30 no cuenta como "antes".
+  - **cadena:** al menos la mitad de las pistas que cita la cadena crítica del solver humano (`solve.steps[].cl`) arde **estrictamente** después de 2:30.
+  - **puntuación:** en el tercio bajo o medio de la banda del nivel, es decir, `score ≤ mín + (máx − mín) × 2/3`.
+  - **No aplicada:** la garantía opcional de calibración ("ninguna pista crítica anclada al foco salvo equivalente"). MODOS la marca como opcional y no da forma de decidir qué pista es "equivalente".
+  - Recuerda la decisión D1: las garantías no aseguran que el caso siga siendo resoluble con las pistas quemadas; poder perder es parte del modo.
+- **Textos:** una causa por cada una de las 50 salas (`src/modes/fire/texts.ts`), que siempre nombra la sala. Título "{Lugar} en llamas" con el nombre del escenario. Presentación "{Causa} ha incendiado {lugar}." más una de tres frases de cierre según el hueco. Para el tren y el barco el cierre del prototipo ("antes de que ceda el tejado") pasa a "antes de que ceda la estructura".
+- **Banco y validación:** `public/cases/incendio.json` = `{ version, stats, cases }`. `stats` son las cifras de generación (candidatos, rechazos por garantía, repetidos, huecos vacíos) para que el informe se pueda rehacer sin regenerar. `pnpm bank:validate` valida cada caso de incendio con todas las comprobaciones del caso normal y además: foco igual al de la regla, `ign`/`burnAt` iguales a la fórmula, título, presentación que nombra el foco, tope de pistas, nivel coherente con la dificultad, todas las garantías y firmas sin repetir con el resto del banco. Avisa si un nivel no llega a su cupo.
+- **Generar solo el incendio:** `pnpm exec tsx scripts/build-fire-bank.ts`. Evita repetir firmas de todo el banco ya publicado, actualiza `manifest.json` y escribe `reports/fire-report.md`. `pnpm bank:build` (banco completo) genera también el grupo, el último para no repetir casos de los demás.
+- **Sala conectada al banco, sin repetir (MODOS 2.6):**
+  - Cada jugador tiene su propio orden de edificios: el banco barajado con `getOrderSeed()|incendio|versión`, como el expediente.
+  - Por nivel se ofrece el primer edificio **sin resolver**. Los ya resueltos quedan en "Edificios resueltos" con su mejor marca, para mejorarla.
+  - "Resuelto" se lee de `hm2:fire` (`bestLeft` distinto de null), sin un segundo registro de jugados que pudiera desincronizarse.
+  - **Un derrumbe no cuenta como resuelto**: el edificio se sigue ofreciendo hasta que lo resuelvas. Si contara, un edificio perdido desaparecería sin opción de revancha más que en ese mismo momento.
+  - Se respetan los escenarios desbloqueados por rango, como en el banco normal. Si un nivel no tiene ninguno desbloqueado, se ofrecen todos.
+  - El filtro Todos / Novato / Inspector exprés muestra u oculta cada nivel. Cada nivel indica "Resueltos: N de M".
+- **Calibración, primera generación** (`reports/fire-report.md`; para ajustarla está el prompt de MODOS 10, "Calibrar la justicia del incendio"):
+  - Se generaron 59 candidatos para 40 casos, con 13 huecos vacíos, casi todos de Inspector exprés: el tope estricto de 9 pistas hace que muchos intentos no lleguen a ser candidatos.
+  - La garantía que más rechaza, con diferencia, es la de **puntuación** (19). Ritmo y cadena rechazan 1 cada una. Foco y lectura no rechazan nada, porque se cumplen por construcción: el foco es la sala más alejada, y el mínimo de lectura es 45 + 45 = 90 s.
+  - **Novato quema de forma gradual:** 6 % de las pistas a las 2:00, 16 % a las 3:00, 42 % a las 4:00 y 90 % a las 5:00.
+  - **Inspector exprés quema casi todo al final:** 0 % a las 2:00, 7 % a las 3:00, 26 % a las 4:00 y 96 % a las 5:00. Sus casos son más grandes y el foco queda más lejos de las pistas que importan. La cadena crítica que sobrevive a las 2:30 es del 94 % de media en Inspector y del 84 % en Novato.
+  - Si se quiere más presión en Inspector exprés, la palanca es `FIRE_STEP_S` o el reparto de focos, no las garantías.
+- **Sustituido:** `scripts/build-fire-fixtures.ts` (los dos casos fijos de F1) desaparece; sus pruebas pasan a cubrir el banco entero (`tests/fire/bank.test.ts`).
+
 ## Contenido y diseño
 
 - **Corrección de ruta bajo `base: "/hora-muerta/"`.** `Layout.astro` (heredado de la plantilla de Astro) enlazaba `/favicon.svg` y `/favicon.ico` con ruta absoluta; bajo GitHub Pages con `base: "/hora-muerta/"` esos enlaces romperían. Se corrige usando `import.meta.env.BASE_URL` en ambos `<link>`.
