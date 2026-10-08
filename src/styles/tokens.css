@@ -12,6 +12,9 @@
   --blue: #2a64c8;
   --amber: #b87d0c;
   --focus: #2a64c8;
+  /* Acierto (calentamiento): 5,3:1 sobre el panel; texto blanco encima 5,8:1. */
+  --ok: #267349;
+  --on-ok: #ffffff;
 
   --display: 'Big Shoulders Display', 'Arial Narrow', 'Roboto Condensed', Impact, sans-serif;
   --body: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -36,6 +39,8 @@
     --blue: #8cc4ff;
     --amber: #f2c14e;
     --focus: #8cc4ff;
+    --ok: #6fd39b;
+    --on-ok: #0d2a45;
     color-scheme: dark;
   }
 }
@@ -53,5 +58,28 @@
   --blue: #8cc4ff;
   --amber: #f2c14e;
   --focus: #8cc4ff;
+  --ok: #6fd39b;
+  --on-ok: #0d2a45;
+  color-scheme: dark;
+}
+
+/* Modo Incendio (docs/MODOS.md §1.2): su paleta manda sea cual sea el tema del
+   sistema. Va al final a propósito: tiene la misma especificidad (0,2,0) que los
+   temas de arriba y tiene que ganarles. Contraste comprobado (WCAG): texto
+   claro sobre cualquier superficie 13,9:1 o más; texto de botón oscuro sobre
+   brasa 6,1:1; bordes de control 3:1 o más. */
+:root[data-mode='fuego'] {
+  --paper: #160e0b;
+  --panel: #22150f;
+  --room: #2a1a13;
+  --ink: #f7e8d4;
+  --ink-2: #d9bda0;
+  --grid: #94634b;
+  --wall: #f0ad6e;
+  --pencil: #ff5a1f;
+  --on-pencil: #160e0b;
+  --blue: #ffb13b;
+  --amber: #ffb13b;
+  --focus: #ffb13b;
   color-scheme: dark;
 }

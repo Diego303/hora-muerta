@@ -9,7 +9,6 @@ import {
   rankForStars,
   rankProgress,
   recordClosure,
-  recordSeriesCompletion,
 } from '../../src/game/progression';
 import { DEFAULT_PROFILE } from '../../src/game/storage';
 import type { CaseDef } from '../../src/engine/types';
@@ -153,12 +152,6 @@ describe('game/progression: archivo de arquetipos (§16.2)', () => {
     expect(profile.arch.coartada).toBe(1);
     expect(profile.arch.vacia).toBe(1);
     expect(newArchetypes.sort()).toEqual(['coartada', 'vacia']);
-  });
-
-  it('recordSeriesCompletion suma un expediente sin tocar el resto del perfil', () => {
-    const profile = recordSeriesCompletion(DEFAULT_PROFILE);
-    expect(profile.series).toBe(1);
-    expect(profile.stars).toBe(0);
   });
 });
 

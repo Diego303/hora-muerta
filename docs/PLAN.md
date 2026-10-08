@@ -50,7 +50,7 @@ src/
     store.ts                  # estado + acciones + suscripción + deshacer
     storage.ts                 # hm2:* con try/catch y migración desde hm:
     bank.ts                     # manifest, carga bajo demanda, orden personal, jugados (§12.5)
-    modes.ts                     # suelto, diario, expediente, infinito (§13)
+    modes.ts                     # suelto, diario, infinito (§13)
     hints.ts                      # pista del inspector (§15)
     scoring.ts                     # estrellas, errores, cierre (§14)
     progression.ts                  # rango, desbloqueos, archivo (§16)
@@ -70,7 +70,7 @@ src/
 scripts/
   build-bank.ts    validate-bank.ts    bank-report.ts    bank.config.ts
 public/
-  cases/                              # generado: manifest.json, novato.json, inspector.json, comisario.json, diario.json, expedientes.json
+  cases/                              # generado: manifest.json, novato.json, inspector.json, comisario.json, diario.json, incendio.json
   manifest.webmanifest                # M9
   icons/                              # M9
   favicon.svg  favicon.ico            # ya existen
@@ -213,6 +213,7 @@ Un hito por sesión. Al cerrar cada uno: `pnpm typecheck && pnpm lint && pnpm te
 - [x] **M5** ✅ código y pruebas unitarias verificados (`pnpm typecheck/lint/test`, 26 pruebas nuevas); e2e escrito (`tests/e2e/close.spec.ts`, resuelve un caso con la solución del JSON) pendiente de ejecutar por el mismo motivo que M4. Pistas interactivas, tabla de objetos, pestaña Caso, acusación, estrellas, cierre, reconstrucción, siguiente caso.
 - [x] **M6** ✅ código y pruebas unitarias verificados (`pnpm typecheck/lint/test`, 11 pruebas nuevas de game/hints.ts); e2e escrito, pendiente de ejecutar. Pista del inspector en dos fases con resaltados y coste de estrellas. De paso, corregido un fallo real en `generate.ts` (prem sin reindexar tras filtrar a pasos críticos).
 - [x] **M7** ✅ código y pruebas verificados (`pnpm typecheck/lint/test`): servir sin repetir, caso en curso, enlaces `#caso=`/`#gen=`, caso del día, expediente (presupuesto y estrellas compartidos), modo infinito en Web Worker. Banco de series de Expediente aún generándose en segundo plano (ver DECISIONES.md); e2e pendiente de ejecutar por las dependencias de Playwright.
+- **Nota posterior (Modos):** el modo **Expediente** se eliminó por completo (código, datos, pruebas y diseño); las menciones de M3 y M7 son historia. Ver DECISIONES.md, "Expediente eliminado". Comisario tiene 5 casos publicados, generados con `pnpm bank:group` (ver DECISIONES.md, "Comisario: 5 casos").
 - [x] **M8** ✅ código y pruebas verificados (`pnpm typecheck/lint/test`, `pnpm build`): rango, desbloqueos de escenario, archivo de arquetipos, estadísticas, Ajustes, Perfil, Ayuda, persistencia `hm2:profile` y migración desde v1. E2e no escrito (Playwright sigue bloqueado en este entorno).
 - [x] **M9** ✅ código verificado (`pnpm typecheck/lint/test`, `pnpm build`): PWA (manifest, iconos, Service Worker), accesibilidad (aria-label dinámico, teclado, contraste), rendimiento revisado. E2e/capturas/Lighthouse sin ejecutar (Playwright sigue bloqueado en este entorno); pendiente de confirmación real del usuario en su despliegue.
 

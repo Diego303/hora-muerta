@@ -17,21 +17,26 @@ const MODE_LABEL: Record<CaseMode, string> = {
   inspector: 'Inspector',
   comisario: 'Comisario',
   diario: 'Diario',
-  expediente: 'Expediente',
 };
 
 export interface LandingOptions {
   onStart: (diff: 0 | 1 | 2, mapFilter: MapId | null) => void;
   onDaily: () => void;
   onResume: () => void;
-  onExpediente: () => void;
   onSettings: () => void;
   onProfile: () => void;
   onHelp: () => void;
   onTutorial: () => void;
+  onAcademy: () => void;
+  onFire: () => void;
   onPlayCase: (caseData: CaseDef, bankVersion: string | null) => void;
   onShowCaseList: () => void;
+  /** Abrir la portada con el plano de casos ya desplegado. */
+  openCaseMap?: boolean;
 }
+
+const ICO_BULB = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ICO_FLAME = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2c1 4 5 6 5 11a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3-1-6 1-9.5z"/></svg>';
 
 export function renderLanding(root: HTMLElement, options: LandingOptions): () => void {
   const profile = getProfile();
@@ -51,6 +56,7 @@ export function renderLanding(root: HTMLElement, options: LandingOptions): () =>
         </div>
         <nav>
           <button class="icon-btn" id="goTutorial">Tutorial</button>
+          <button class="icon-btn" data-go="academy">Calentar</button>
           <button class="icon-btn" id="goHelp">Cómo se juega</button>
           <button class="icon-btn" id="goProfile" aria-label="Perfil">☰</button>
           <button class="icon-btn" id="goSettings" aria-label="Ajustes">⚙</button>
@@ -69,10 +75,13 @@ export function renderLanding(root: HTMLElement, options: LandingOptions): () =>
           <h1>Una noche, un plano, un solo culpable.</h1>
           <p class="lead">Puzles de deducción sobre el plano de una casa, un tren o un museo. Sigues a cada sospechoso hora a hora y descubres quién estuvo a solas con la víctima. Cada caso pasa por un verificador lógico antes de servirse: nunca hace falta adivinar.</p>
           <div class="ctas">
-            <button class="btn" id="goDaily">Jugar el caso del día</button>
+            <button class="btn cta-main" id="goDaily">Jugar el caso del día</button>
+            <a class="btn ghost" href="#plano-casos">Abrir el plano de casos</a>
+            <button class="btn ghost" data-go="academy">${ICO_BULB}Calentamiento</button>
+            <button class="btn danger" data-go="fire">${ICO_FLAME}Modo Incendio</button>
             <a class="btn ghost" href="#niveles">Elegir nivel</a>
-            <button class="btn ghost" id="goExpediente">Expediente</button>
           </div>
+          <p class="warmup"><button class="link" data-go="academy">Calienta 5 minutos antes del caso del día</button></p>
           <p class="resume" id="resume" hidden><button class="link" id="resumeBtn"></button></p>
           <button class="rank-chip" id="goProfile2" aria-label="Ver el perfil completo">
             <b>${rank.name}</b><span>${profile.stars} ★${next ? ` · ${starsToNext} para ${next.name}` : ''}</span>
@@ -176,12 +185,13 @@ export function renderLanding(root: HTMLElement, options: LandingOptions): () =>
     });
   });
   root.querySelector('#goDaily')?.addEventListener('click', () => options.onDaily());
-  root.querySelector('#goExpediente')?.addEventListener('click', () => options.onExpediente());
   root.querySelector('#goSettings')?.addEventListener('click', () => options.onSettings());
   root.querySelector('#goHelp')?.addEventListener('click', () => options.onHelp());
   root.querySelector('#goProfile')?.addEventListener('click', () => options.onProfile());
   root.querySelector('#goProfile2')?.addEventListener('click', () => options.onProfile());
   root.querySelector('#goTutorial')?.addEventListener('click', () => options.onTutorial());
+  root.querySelectorAll<HTMLButtonElement>('[data-go="academy"]').forEach((b) => b.addEventListener('click', () => options.onAcademy()));
+  root.querySelectorAll<HTMLButtonElement>('[data-go="fire"]').forEach((b) => b.addEventListener('click', () => options.onFire()));
   root.querySelector('#tutGo')?.addEventListener('click', () => options.onTutorial());
 
   const statsEl = root.querySelector<HTMLParagraphElement>('#stats');
@@ -213,7 +223,7 @@ export function renderLanding(root: HTMLElement, options: LandingOptions): () =>
 
   const caseMapHost = root.querySelector<HTMLDivElement>('#caseMapHost');
   const stopCaseMap = caseMapHost
-    ? renderCaseMap(caseMapHost, { onPlay: options.onPlayCase, onShowFullList: options.onShowCaseList })
+    ? renderCaseMap(caseMapHost, { onPlay: options.onPlayCase, onShowFullList: options.onShowCaseList, startOpen: options.openCaseMap })
     : () => undefined;
 
   return () => {

@@ -15,7 +15,7 @@ export function renderObjectsTable(container: HTMLElement, ctx: ClueTextContext,
   const N = state.caseData.N;
   const settings = getSettings();
 
-  const header = ctx.suspects.map((s) => `<th style="color:${s.color}">${s.name[0]}</th>`).join('');
+  const header = ctx.suspects.map((s) => `<th><span class="who" style="--c:${s.color}">${s.name[0]}</span></th>`).join('');
   const rows = ctx.objects
     .map((o, oi) => {
       const cells = Array.from({ length: N }, (_, ci) => {

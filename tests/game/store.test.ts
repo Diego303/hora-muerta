@@ -263,7 +263,7 @@ describe('game/store', () => {
       expect(store.getState().result).toBe('archived');
     });
 
-    it('con maxErrors=Infinity (una noche de expediente, §13) nunca se archiva sola', () => {
+    it('con maxErrors=Infinity (tutorial o Modo Incendio) nunca se archiva sola', () => {
       const store = createGameStore(CASE, 8, () => ({ kind: 'done' }), Number.POSITIVE_INFINITY);
       store.setAccuseCulprit((CASE.culprit + 1) % CASE.N);
       store.setAccuseWeapon(CASE.weapon);
@@ -272,13 +272,6 @@ describe('game/store', () => {
         expect(outcome.result).toBe('playing');
       }
       expect(store.getState().result).toBe('playing');
-    });
-
-    it('forceArchive cierra la noche como archivada sin pasar por accuse()', () => {
-      const store = createGameStore(CASE, 8, () => ({ kind: 'done' }), Number.POSITIVE_INFINITY);
-      expect(store.getState().result).toBe('playing');
-      store.forceArchive();
-      expect(store.getState().result).toBe('archived');
     });
   });
 });

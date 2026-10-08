@@ -196,6 +196,283 @@ Dos hallazgos a petición del usuario, ninguno visto en un navegador real (Playw
 - **Bug real en el generador: el presupuesto de lectura de Novato (§6.3, 600 caracteres) se comprobaba ANTES de añadir la pista de cortesía, no después.** `src/engine/generate.ts` calculaba `readLength` sobre `clues` y luego, solo para Novato (`courtesyClues:1`), añadía una pista más sin volver a comprobar la longitud — así que la pista de cortesía podía colar un caso por encima del tope real. `pnpm bank:validate` (que re-verifica CADA caso publicado contra el solver exacto, el humano y todas las comprobaciones de forma, no solo confía en lo guardado) lo detectó: 3 casos de Novato (N-075, N-084, N-125) superaban el tope. Arreglo: la comprobación de longitud se mueve a después de añadir la pista de cortesía. Los 3 casos afectados se regeneraron (los otros 167 de Novato y el resto de niveles no cambian: se verificó comparando firma a firma contra la versión anterior). De paso se exportó `generateGroup()` de `scripts/build-bank.ts` (con una guarda `if (fileURLToPath(import.meta.url) === process.argv[1]) main();` para que importarlo no dispare una generación completa) para poder regenerar un único grupo sin relanzar el banco entero — útil para este arreglo y para el futuro. `public/cases/manifest.json` también tenía el recuento de Inspector desactualizado (160 en vez de los 164 reales del archivo); corregido de paso, aunque no lo lee ningún código en tiempo de ejecución.
 - **Confirmado por auditoría completa: `pnpm bank:validate` da "todo correcto" sobre los 389 casos publicados** (170 Novato + 164 Inspector + 55 Diario). Comisario y Expediente siguen vacíos (0 casos) en el banco publicado — hueco ya documentado más arriba, pendiente de una generación completa con R6_HYPOTHESIS que no se ha lanzado todavía (podría tardar bastante, ver la entrada de "Corrección tras la primera ejecución real").
 
+## Modos Incendio y Calentamiento: F0 (infraestructura)
+
+Plan completo en `docs/PLAN_MODOS.md`. Esta sección recoge lo decidido al implementar F0.
+
+- **Decisiones del usuario sobre el plan:**
+  - **D1, solubilidad con pistas quemadas:** el caso puede volverse irresoluble cuando arden pistas. La presión del tiempo y la posibilidad de perder son parte del juego, así que no se exige la garantía fuerte de solubilidad con cualquier pareja de pistas tempranas. Se mantienen las garantías de MODOS 2.5 tal como están y el principio de MODOS 0.3: el incendio quita información de forma predecible y evitable. **Tensión a vigilar:** CLAUDE.md dice que el incendio "nunca puede exigir adivinar". La lectura que se aplica es que no hace falta adivinar mientras se razona a tiempo; si se acaba el tiempo con la información quemada, se pierde. Queda pendiente confirmar la redacción de CLAUDE.md, que no se cambia sin preguntar.
+  - **D2:** "Casa de prácticas" es un mapa solo de ejercicios (`src/content/practice.ts`), fuera del banco de casos.
+  - **D4:** 90 remates, 30 por nivel. Corrige la cifra de MODOS 3.8: con 4 técnicas × 3 niveles × 30 el total es 360, y los remates son 90, no 60.
+  - D5 y D6 se aplican en F0 (ver abajo). El resto (D3, D7 a D13) se aplica en su fase.
+
+- **Router (`core/router.ts`):** `createRouter` con `showView(name, params)` y `replaceScreen(mount)`.
+  - Cuatro vistas: `home`, `game`, `fire` y `academy`. La vista `game` recibe un `GameRoute { hash, mount }`: la partida se monta con las mismas funciones de siempre (`renderBoard` y compañía) y el router solo decide cuándo se para. Así no hay que reescribir los flujos de caso, expediente, modo infinito y enlaces.
+  - `replaceScreen` sustituye el contenido de la vista activa (ajustes, perfil, cargas) sin cambiar modo ni hash. Para la vista antes de montar la pantalla; si no, el demo de la portada seguiría corriendo debajo de Ajustes.
+  - Si durante `enter` se navega otra vez, la vista que se estaba montando se para en vez de quedar huérfana (un contador de navegaciones lo detecta).
+  - **Desviación:** no hay `render()` separado. Cada pantalla se pinta en su `enter` y se repinta por dentro. Separarlo ahora sería código muerto; se añadirá si una fase lo necesita.
+  - **Hash:** el router escribe `#incendio`, `#academia` y `#tutorial`, y `home` borra solo esos. Los enlaces `#caso=` y `#gen=` se conservan tal cual. Escribir `#caso=` en cada partida rompería el modo infinito y el expediente al recargar, porque sus ids no están en ningún banco.
+  - `#tutorial` se puede abrir ya por enlace directo; antes solo por botón.
+
+- **Modo visual:** `data-mode="fuego"` en `<html>`. La paleta va al final de `tokens.css` porque tiene la misma especificidad (0,2,0) que los temas y tiene que ganarles. Contraste calculado en WCAG: texto claro 13,9:1 o más sobre cualquier superficie; texto oscuro sobre brasa 6,1:1; bordes de control 3:1 o más. **Ajuste:** `--grid` pasa de `#4a2c20` a `#94634b`, porque con la primera el borde de los chips quedaba en 1,5:1.
+
+- **Destello (`core/visualmode.ts`):** un único elemento que se borra al acabar su animación, sin temporizador. Con movimiento reducido no hay destello. La paleta cambia al empezar y el destello se superpone; no se sincroniza con la mitad de la animación, para no depender de un temporizador.
+
+- **Miniplano (`ui/planlite.ts`):** la API de 1.3, más `selected`, que hace falta para mostrar qué salas ha elegido quien responde. El marcado es una función pura comprobable en Node. El tablero (`ui/plan.ts`) y el tutorial no se tocan (D6); planlite se usará en calentamiento y en la vista previa del incendio.
+
+- **Portada (D5):** los cuatro botones principales siguen el orden de 1.4 ("Abrir el plano de casos" es un ancla a `#plano-casos`). Se conservan "Elegir nivel", "Expediente", ☰ Perfil y ⚙ Ajustes, porque ya funcionan. En móvil, "Jugar el caso del día" ocupa una fila entera.
+
+- **Cabecera:** `.top` y `nav` pueden partirse en dos filas en vez de desbordar la anchura. Con seis botones no hay forma fiable de medir el ancho sin un navegador, así que se evita el desbordamiento en lugar de calcularlo.
+
+- **Pantallas provisionales:** Incendio y Calentamiento muestran "Todavía en construcción" hasta F2 y F4, con botón para volver. Solo texto, sin temporizadores.
+
+- **Pruebas:** `vitest.config.ts` incluye `tests/core` y `tests/ui`. Hay 20 pruebas nuevas: 9 del router (orden de salida y entrada, modo, hash, pantalla transitoria, navegación anidada, temporizadores parados al volver al menú y lectura del hash), 3 del destello y 8 del miniplano. No se ha relanzado la suite lenta del solver porque F0 no toca `src/engine`.
+
+- **Pendiente de comprobación en el móvil:** la cabecera a 360 px, la fila principal de la portada y las dos pantallas provisionales. Playwright no corre en este entorno.
+
+### F0, segunda vuelta: contrato enter/render/leave y prueba de temporizadores
+
+Se pidió el contrato completo de MODOS 1.1 y una prueba que compruebe que al volver al menú no queda nada activo. Cambios:
+
+- **Contrato de vista:** `enter(params)` monta y arranca lo que necesita; `render(params)` pinta o repinta; `leave()` para todo lo que `enter` arrancó. `router.render()` repinta la vista activa con sus mismos parámetros, sin pararla. Si durante `enter` o `render` se navega otra vez, la vista que se estaba montando se para una sola vez.
+- **Vistas de la portada y del tablero:** `screenView` envuelve las pantallas que ya se pintan completas al montarse (portada y partida). Su `render` no hace nada: la partida tiene su propio estado en el store y repintarla desde fuera la reiniciaría. `pendingView` (Incendio y Calentamiento provisionales) usa los tres pasos de verdad: no arranca nada en `enter`, pinta en `render` y quita sus escuchas en `leave`.
+- **Auditoría de temporizadores en `src/`:** no hay ningún `requestAnimationFrame` en el código de la app. De los temporizadores, dos fugas reales estaban cerradas solo por suerte:
+  - **Portada (plano de casos):** la carga de los bancos es asíncrona y el intervalo de los pines se creaba después del `await`. Si se salía de la portada antes de que terminara la carga, el intervalo quedaba vivo. Corregido con una bandera `disposed` que se comprueba tras cada `await`.
+  - **Tutorial (coach):** el `setTimeout` que desplaza el mapa al paso siguiente no se cancelaba al salir. Ahora se guarda y se cancela en su `cleanup`.
+  - **Cierre con reconstrucción:** el overlay de "Ver la noche" tenía su propio intervalo y solo se paraba al cerrarlo desde el propio cierre. Ahora `renderBoard` para el cierre al salir, así que el router también lo para.
+  - **Quedan fuera a propósito:** los avisos (`toast`) se borran solos a los 1,8 s. Son notificaciones, no una vista: si se parasen al salir, el aviso "Ese caso ya no está disponible" desaparecería en el mismo instante en que se muestra.
+- **Pruebas:**
+  - Unitarias (`tests/core/router.test.ts`): la vista con temporizador, intervalo y fotograma queda exactamente como la portada sola tras recorrer todas las vistas; una pantalla transitoria con intervalo y fotograma también queda parada; y un control que demuestra que la prueba detecta una vista que no para lo que arranca. Los fotogramas se cuentan con un sustituto de `requestAnimationFrame` (`tests/support/frameLedger.ts`), porque Node no lo tiene.
+  - De extremo a extremo (`tests/e2e/router.spec.ts`): mide en la propia página los temporizadores, intervalos y fotogramas (un registro inyectado antes de cargar la app), recorre Incendio, Calentamiento, el tutorial, un caso suelto, Ajustes, Perfil y Cómo se juega, y comprueba que al volver al menú coincide con la medida de la portada sola. **No se ejecuta en este entorno.**
+- **Desviación que hay que confirmar: `#caso=` no se escribe en las partidas sueltas.** MODOS 1.1 dice que el router actualiza el hash con `#caso=ID`. Escribirlo al abrir cada caso rompe el flujo "Seguir tu caso sin terminar": al recargar, el enlace abre la partida directamente y el botón de la portada que tiene que retomarla no aparece (lo comprueba `tests/e2e/session.spec.ts`). Por eso el router lee `#caso=` (enlaces de siempre) pero no lo escribe. Si quieres que se escriba, hay que cambiar también ese flujo de reanudación; te lo pregunto antes de tocarlo.
+
+## Modos: F1 (Modo Incendio, núcleo)
+
+- **Casos de prueba (D3):** los dos edificios del prototipo, con su mapa, nivel, foco, título e introducción literales (`scripts/build-fire-fixtures.ts`). El puzle lo genera nuestro motor, porque las semillas del prototipo vienen de otro motor. Casa Valdemar sale con la semilla del prototipo tal cual (`INC-MAN7`, 8 pistas, como en el prototipo). Museo Aldana necesita `INC-MUS6-8`: las siete primeras daban más de 9 pistas, el tope de Inspector exprés. Se guardan en `public/cases/incendio.json` con `ign` y `burnAt` precalculados (MODOS 2.4). `tests/fire/fixtures.test.ts` comprueba que los tiempos guardados son los de la fórmula, que cada pista es verdad, que el solver exacto da solución única, que el solver humano lo resuelve y que el foco está a 2 puertas o más de la escena. En F3 este fichero lo sustituye el grupo `incendio` del banco.
+- **Todo sale de `t` (MODOS 2.3):** `timeline.ts` (estados de sala y pista) y `session.ts` (reloj) son puros. El reloj guarda solo los milisegundos consumidos y desde cuándo corre, con el `now` inyectado. Pausa, penalización y derrumbe son operaciones sobre ese dato. La capa de fuego no guarda estado del fuego: en cada tic calcula los estados y solo redibuja si cambia la "firma" (estado de cada sala); las cuentas atrás se reescriben como texto.
+- **Una sala sin camino desde el foco no arde nunca** (`ign = Infinity`). No pasa en los 6 mapas, que son conexos, pero así la fórmula no depende de esa suposición.
+- **Bloqueos en el store, no en la UI:** el store recibe un contrato pequeño (`BoardLocks`: sala en llamas, sala bajo un punto, congelado y aviso) y sigue sin saber nada de incendios. En una sala en llamas no se marca ni se cambia una marca. Deshacer una entrada que afecta a una sala en llamas la descarta (sale de la pila) con aviso. No se empieza un trazo cuyo primer punto cae en una sala en llamas (D11). La goma sí funciona. Las marcas y los trazos ya hechos se siguen viendo: la capa de fuego va justo encima de las salas y debajo de las marcas. La tabla de objetos, los descartes y las pistas tachadas no se bloquean nunca.
+- **Derrumbe:** el tablero se congela cuando el derrumbe se **procesa** (se muestra su capa), no en el instante exacto en que el reloj toca 0. Así una acusación correcta que llega antes de que se procese cuenta (MODOS 2.9). Si una penalización agota el tiempo, el derrumbe se procesa en el momento. Al procesarlo se cierra la hoja de acusación si estaba abierta. La capa ofrece "Volver a entrar" (el mismo fuego, todo desde cero) y "Volver al menú". "Ver la solución" llega en F2 con el cierre.
+- **Acusación en el incendio:** sin presupuesto de errores. Una errónea suma 30 s y avisa; una correcta va al cierre normal. El cierre de un incendio no registra progreso, no marca el caso como jugado y **no borra el caso normal en curso** (antes `showClosure` lo borraba siempre). Las estrellas del incendio (D12) llegan en F2.
+- **Pista del inspector desactivada** y caso no guardado (recargar es abandonar, MODOS 2.8).
+- **Pausa:** al ocultarse la pestaña el reloj se para. Al volver aparece "En pausa" con el botón Seguir, que es quien reanuda: no se reanuda solo, para que no te pille por sorpresa.
+- **Paleta en partida:** la vista `game` puede pedir el modo visual según sus parámetros (`ViewDef.mode` acepta una función), así que un incendio se juega con la paleta de fuego y una partida normal no.
+- **Lista de edificios provisional:** dos tarjetas con Entrar. La sala completa (miniplano de calor, mejor marca, filtro) es de F2.
+- **Pendiente para F2:** el plano ampliado no muestra la capa de fuego (los bloqueos sí se aplican, porque comparten store y geometría); línea de estado, barra del edificio, fotos, quemado de pistas, cierre con medallas y chispas.
+- **Pruebas:** 53 unitarias nuevas (línea de tiempo con tablas por `t` en los dos casos, reloj, bloqueos del store y casos de prueba) y un e2e (`tests/e2e/fire.spec.ts`) con el reloj simulado de Playwright: derrumbe, penalización, derrumbe inmediato por penalización, pausa y vuelta al menú. El e2e no se ejecuta en este entorno: Chromium no arranca porque falta `libnspr4.so`, que requiere `sudo`.
+
+## Modos: F2 (Modo Incendio completo)
+
+- **Estado de un intento (`modes/fire/play.ts`):** reloj, fotos que quedan, pistas salvadas, acusaciones erróneas y si ya terminó (resuelto o derrumbado). Lo que arde se sigue deduciendo del tiempo consumido; lo único que la interfaz recuerda entre tics es qué estados ha visto ya, para anunciarlos y repintar solo cuando cambian.
+- **Tablero, sin saber de incendios:** `FireHooks` gana cuatro puntos de extensión, `decoratePlan` (la capa de fuego va también en el plano ampliado, pendiente de F1), `clueDecor`, `onSolved` y `confirmExit`. `onReady` recibe además un `BoardHandle` con `refreshSheet()`, para repintar las pistas cuando una arde sin que cambie el store. `ui/clues.ts` recibe un `ClueDecor` genérico (clase, contenido a la derecha, pista ilegible y acciones con `data-clue-act`): la lista no conoce el modo.
+- **Pistas que arden:** mecha con cuenta atrás (solo cuando quedan 30 s o menos), "Ardiendo" durante los 4 s de quemado y después "Pista quemada" con una barra de ceniza; **el texto de la pista deja de estar en el DOM**. Se distingue por texto y textura, no solo por color. Las mechas se actualizan como texto en el sitio; la lista solo se repinta cuando cambia el estado de alguna pista. Si la pista que estaba enfocada se quema, se quita el foco para que el plano deje de resaltar sus salas.
+- **Fotos:** 2 por caso, botón de cámara en cada pista. Una foto sobre una pista que ya arde se rechaza con aviso (MODOS 2.9); la cámara sigue visible mientras arde para que el aviso explique por qué no funciona, en vez de que el botón desaparezca sin más. Una pista salvada dice "A salvo" y nunca arde.
+- **Línea de estado** bajo las horas: "Humo. Prende la Cocina, dentro de 0:35." durante el humo; "Arden: X. Después: Y, dentro de 0:20." con fuego; "Arden: …" cuando ya no queda nada por prender. **Barra del edificio** dentro de la cabecera (posición absoluta): si fuera una fila propia, en tableta y escritorio se colaría en la rejilla de la mesa de trabajo como una celda más.
+- **Humo:** un velo gris suave sobre el plano durante los primeros 45 s, que oscila de opacidad en 4 s (muy por debajo del límite de 3 destellos por segundo) y se quita con movimiento reducido.
+- **Anunciador `role="status"`:** solo "La Cocina arde.", "La pista 4 se ha quemado.", "Pista 4 a salvo.", "Queda 1 minuto." y "El edificio se ha derrumbado.". Nunca la cuenta atrás. Las salas en llamas añaden ", en llamas" a su `aria-label`.
+- **Cierre (`ui/end.ts`):** "Resuelto entre las llamas", el veredicto (el mismo `closingText` que el cierre normal), el tiempo sobrante y las tres medallas, cada una con ✓ o — y el motivo en texto. Botones Ver la noche, Mejorar mi tiempo y Volver al Modo Incendio.
+- **Derrumbe:** Volver a entrar, **Ver la solución** (despliega el veredicto y "Ver la noche en el plano") y Volver. "Volver" lleva a la sala del incendio (en F1 llevaba al menú): es lo coherente con "Volver al Modo Incendio" del cierre.
+- **Salir a mitad:** diálogo propio (`ui/confirm.ts`, reutilizable) con el texto literal de MODOS ("Si sales, el incendio se pierde. ¿Salir?"); el foco va a "Seguir dentro", Escape cancela. Si el caso ya terminó, se sale sin preguntar. El reloj sigue corriendo con el diálogo abierto: es parte de la presión.
+- **Transición de entrada:** es el destello de F0 al pasar del menú (modo normal) a la sala del incendio. Entre la sala y un edificio no hay destello, porque los dos están ya en modo fuego.
+- **Chispas (`theme/embers.ts`):** un único `<canvas>` fijo y sin eventos de puntero, como mucho 80 partículas, intensidad 0,12 en la sala y proporcional al tiempo consumido dentro del edificio. Se paran con la pestaña oculta, al salir y no arrancan con movimiento reducido.
+- **Récords `hm2:fire` (MODOS 2.8):** `{ bestLeft, medals, attempts, solvedAt }` por caso. Cada entrada cuenta como intento. `medals` guarda la unión de todas las medallas conseguidas en ese caso y `solvedAt` la fecha de la última resolución (MODOS no dice si la primera o la última). **Estrellas (D12):** 1 por resolver más 1 por medalla, con un máximo de 3 por caso, y **solo se suma lo que mejora** la mejor marca de ese caso. Si no, repetir el mismo edificio daría estrellas sin límite. Se suman al perfil igual que `recordClosure` (estrellas y rango), sin tocar las estadísticas normales.
+- **Sala del incendio:** título con degradado, presentación, las cinco reglas del prototipo con iconos, filtro Todos / Novato / Inspector exprés y tarjetas con el miniplano de calor (planlite con `heat` por distancia en puertas y una llama en el foco), nivel, título, introducción, datos del caso y tu mejor marca. "Servir sin repetir" queda para F3: con 2 edificios no tiene sentido.
+- **Contraste AA:** `tests/fire/contrast.test.ts` lee la paleta de fuego directamente de `tokens.css` y comprueba cada combinación que usa el modo: texto principal y secundario sobre las tres superficies; brasa y llama como texto; texto oscuro sobre brasa (botones, reloj del último minuto, "Ardiendo") y sobre llama (mecha, medalla); la línea de estado sobre su fondo teñido; y bordes de control, paredes y foco a 3:1. Todo pasa. Si alguien cambia un color, la prueba lo detecta.
+- **Pruebas:** 28 unitarias nuevas (medallas, estrellas y récords, línea de estado, fotos, calor de la vista previa y contraste) y dos ficheros e2e: `fire-complete.spec.ts` (sala, fotos y quemado, caso resuelto con medallas y récord, derrumbe con Ver la solución, y capturas en 390 × 844, 844 × 390 y 1280 × 800 vía los tres proyectos de Playwright) y el ajuste de `fire.spec.ts` (salir pide confirmación). **No se ejecutan aquí** (Chromium sin `libnspr4.so`). Las capturas quedan en `test-results/` cuando lo ejecutes.
+
+## Modos: F3 (incendio en el banco)
+
+- **Grupo `incendio`** (`scripts/bank.config.ts#FIRE_GROUPS`, `scripts/fire-bank.ts`): 20 Novato y 20 Inspector exprés con la tubería normal de cada dificultad. Inspector exprés lleva un tope **estricto** de 9 pistas, nueva opción `maxClues` de `buildCaseCandidate`: descarta el intento antes del solver humano, que es lo caro. Sin esa opción el generador tolera pasarse del máximo a partir del tercer intento, y solo el 25 % de los casos Inspector publicados tiene 9 pistas o menos. Los demás grupos no la usan, así que el resto del banco sale idéntico.
+- **Huecos:** cada hueco rota escenario (`slot % 6`) y se reintenta hasta 16 veces con semillas `BANK_VERSION|incendio|modo|hueco|reintento`. Si un hueco se agota, se pasa al siguiente (otro escenario) hasta llenar el cupo, con un tope de 3 × cupo huecos. Por eso el reparto de escenarios puede no ser exactamente uniforme.
+- **Generación en paralelo, con el mismo resultado:** en serie, Inspector exprés tardaba unos 2 minutos por hueco (más de una hora el grupo).
+  - Cada hueco es una función pura (`generateFireSlot`) de (grupo, hueco, firmas ya publicadas). No mira lo aceptado en otros huecos del mismo grupo. Los repetidos dentro del grupo se resuelven al juntar en orden de hueco: el posterior cuenta como hueco vacío.
+  - Los huecos se lanzan por tandas en procesos hijos (`scripts/fire-parallel.ts` y `fire-slot-worker.ts`): uno por hueco, tantos a la vez como núcleos menos uno, o los que diga `FIRE_JOBS`. Son procesos y no hilos porque cada hijo arranca con el mismo cargador tsx que el padre, que es lo fiable aquí (ver la nota de M3 sobre `worker_threads`).
+  - Los huecos calculados de más en la última tanda se descartan sin contar en las cifras, así que **casos e informe son idénticos con 1 o con 16 trabajos**. Lo cubre `tests/fire/generation.test.ts` (tandas de 1, 2, 4, 7 y 16) y se comprobó que un hueco generado en un proceso hijo sale idéntico al generado en el propio proceso.
+  - Si el padre no corre con tsx, o `FIRE_JOBS=1`, se genera en el propio proceso.
+- **Foco (MODOS 2.5.2 y D9):** la sala más alejada en puertas de la escena. En empate, la que tenga más pistas ancladas a salas de **distancia intermedia** desde ella. Defino distancia intermedia como entre 1 y "la más lejana desde ese foco menos 1": ni el propio foco ni lo último en arder. Después, el índice. `chooseOrigin` es pura y la usan el generador, el validador y las pruebas.
+- **Garantías (MODOS 2.5.4)** en `src/modes/fire/fairness.ts`, con los números de MODOS:
+  - **foco:** a 2 puertas o más de la escena.
+  - **lectura:** cada pista arde a los 90 s o más.
+  - **ritmo:** arde antes de 2:30 como mucho el 40 % de las pistas. Arder exactamente a 2:30 no cuenta como "antes".
+  - **cadena:** al menos la mitad de las pistas que cita la cadena crítica del solver humano (`solve.steps[].cl`) arde **estrictamente** después de 2:30.
+  - **puntuación:** en el tercio bajo o medio de la banda del nivel, es decir, `score ≤ mín + (máx − mín) × 2/3`.
+  - **No aplicada:** la garantía opcional de calibración ("ninguna pista crítica anclada al foco salvo equivalente"). MODOS la marca como opcional y no da forma de decidir qué pista es "equivalente".
+  - Recuerda la decisión D1: las garantías no aseguran que el caso siga siendo resoluble con las pistas quemadas; poder perder es parte del modo.
+- **Textos:** una causa por cada una de las 50 salas (`src/modes/fire/texts.ts`), que siempre nombra la sala. Título "{Lugar} en llamas" con el nombre del escenario. Presentación "{Causa} ha incendiado {lugar}." más una de tres frases de cierre según el hueco. Para el tren y el barco el cierre del prototipo ("antes de que ceda el tejado") pasa a "antes de que ceda la estructura".
+- **Banco y validación:** `public/cases/incendio.json` = `{ version, stats, cases }`. `stats` son las cifras de generación (candidatos, rechazos por garantía, repetidos, huecos vacíos) para que el informe se pueda rehacer sin regenerar. `pnpm bank:validate` valida cada caso de incendio con todas las comprobaciones del caso normal y además: foco igual al de la regla, `ign`/`burnAt` iguales a la fórmula, título, presentación que nombra el foco, tope de pistas, nivel coherente con la dificultad, todas las garantías y firmas sin repetir con el resto del banco. Avisa si un nivel no llega a su cupo.
+- **Generar solo el incendio:** `pnpm exec tsx scripts/build-fire-bank.ts`. Evita repetir firmas de todo el banco ya publicado, actualiza `manifest.json` y escribe `reports/fire-report.md`. `pnpm bank:build` (banco completo) genera también el grupo, el último para no repetir casos de los demás.
+- **Sala conectada al banco, sin repetir (MODOS 2.6):**
+  - Cada jugador tiene su propio orden de edificios: el banco barajado con `getOrderSeed()|incendio|versión`, como el expediente.
+  - Por nivel se ofrece el primer edificio **sin resolver**. Los ya resueltos quedan en "Edificios resueltos" con su mejor marca, para mejorarla.
+  - "Resuelto" se lee de `hm2:fire` (`bestLeft` distinto de null), sin un segundo registro de jugados que pudiera desincronizarse.
+  - **Un derrumbe no cuenta como resuelto**: el edificio se sigue ofreciendo hasta que lo resuelvas. Si contara, un edificio perdido desaparecería sin opción de revancha más que en ese mismo momento.
+  - Se respetan los escenarios desbloqueados por rango, como en el banco normal. Si un nivel no tiene ninguno desbloqueado, se ofrecen todos.
+  - El filtro Todos / Novato / Inspector exprés muestra u oculta cada nivel. Cada nivel indica "Resueltos: N de M".
+- **Calibración, primera generación** (`reports/fire-report.md`; para ajustarla está el prompt de MODOS 10, "Calibrar la justicia del incendio"):
+  - Se generaron 59 candidatos para 40 casos, con 13 huecos vacíos, casi todos de Inspector exprés: el tope estricto de 9 pistas hace que muchos intentos no lleguen a ser candidatos.
+  - La garantía que más rechaza, con diferencia, es la de **puntuación** (19). Ritmo y cadena rechazan 1 cada una. Foco y lectura no rechazan nada, porque se cumplen por construcción: el foco es la sala más alejada, y el mínimo de lectura es 45 + 45 = 90 s.
+  - **Novato quema de forma gradual:** 6 % de las pistas a las 2:00, 16 % a las 3:00, 42 % a las 4:00 y 90 % a las 5:00.
+  - **Inspector exprés quema casi todo al final:** 0 % a las 2:00, 7 % a las 3:00, 26 % a las 4:00 y 96 % a las 5:00. Sus casos son más grandes y el foco queda más lejos de las pistas que importan. La cadena crítica que sobrevive a las 2:30 es del 94 % de media en Inspector y del 84 % en Novato.
+  - Si se quiere más presión en Inspector exprés, la palanca es `FIRE_STEP_S` o el reparto de focos, no las garantías.
+- **Sustituido:** `scripts/build-fire-fixtures.ts` (los dos casos fijos de F1) desaparece; sus pruebas pasan a cubrir el banco entero (`tests/fire/bank.test.ts`).
+
+## Modos: F4 (calentamiento, núcleo)
+
+- **Casa de prácticas (D2):** plano solo de ejercicios (`src/modes/gym/content.ts`), que no entra en el banco de casos. Para no forzar `MapDef` (que exige `w: 12`, `h: 9` y un `MapId` de los seis escenarios) se introduce `FloorPlan` en `engine/types.ts`: lo mínimo para el grafo y el miniplano. Lo cumplen los seis escenarios y la Casa de prácticas, así que `buildGraph` y `planlite` aceptan cualquiera de los dos sin duplicar el grafo. Es solo un cambio de tipos, no de comportamiento.
+- **Reparto y objetos de los ejercicios:** los del prototipo (Bruno, Celia, Dora, Elías; candelabro, cuerda, abrecartas, veneno), con un color fijo por persona. Dora y Elías no están en el reparto del juego; son del calentamiento.
+- **Los 23 ejercicios, portados literalmente** (`src/modes/gym/seed.ts`), con dos formas:
+  - **Forma de autor:** nombres de persona, ids de sala y claves de objeto, como en el prototipo. Las respuestas también van así (`{ type: 'reach', rooms: ['sal', 'coc', 'inv'] }`), de modo que una respuesta no cambia de significado si cambia el orden de una lista.
+  - **Forma normalizada (índices):** la produce `normalize.ts`, que falla con un error claro si un ejercicio cita una sala, persona, objeto o rasgo que no existe.
+- **Reverificación por fuerza bruta (D10 y D13):** `src/modes/gym/verify.ts` enumera todos los escenarios de cada ejercicio (recorridos de una puerta por hora y repartos de objetos), con la regla del crimen cuando la hay, y calcula la respuesta desde cero. En los remates exige exactamente una pista decisiva. Las pistas que no dependen de objetos se comprueban antes de probar repartos, lo que da el mismo resultado mucho más rápido.
+  - `pnpm drills:validate` comprueba los 23 en unos 2 s: **las 23 respuestas del prototipo son correctas también con nuestro motor**, y Casa Valdemar tiene el mismo orden de salas que en el prototipo.
+  - `tests/gym/drills.test.ts` repite la comprobación e incluye un control que cambia una respuesta y verifica que se detecta.
+- **Reglas de error (MODOS 3.5, `grade.ts`):** se aplica la primera que encaje y, si ninguna encaja, solo se muestra la explicación. Interpretaciones:
+  - "Sala de partida": cada "X estaba en S a las H" de lo que se sabe, con H a una hora de la pregunta. La regla de quedarse solo vale para una hora de distancia: el texto de MODOS dice "en una hora".
+  - "Toca sin puerta": las salas comparten pared (no solo esquina) y no hay puerta entre ellas.
+  - "A dos puertas o más": la sala no se alcanza desde **ninguna** hora conocida. El mensaje se adapta al caso ("a tres puertas: no da tiempo en dos horas"); MODOS da el ejemplo de una hora.
+  - "Intersección entre horas": con dos horas conocidas, una sala que encaja con una pero no con la otra. Así las reglas 3 y 5 son disjuntas; si no, la 3 taparía siempre a la 5.
+  - "Rasgo": la sala elegida no cumple un "estaba en una sala con/sin X" de esa persona a esa hora. El texto sale de la etiqueta del rasgo ("no tiene chimenea").
+  - En `clue`, cualquier pista que no sea la decisiva recibe "no cambia nada entre los dos que quedan", porque por construcción hay exactamente una decisiva. En `contra`, cualquier otra recibe "la hipótesis sigue en pie".
+  - **Fuera de la tabla:** el prototipo tenía mensajes propios que MODOS no recoge ("No pudo ser esa opción", "Te faltó X"). No se portan: sin regla, solo explicación, como pide MODOS.
+- **Sesión (MODOS 3.4):** 5 de activación, 5 de la técnica del día y 3 remates, con una pantalla breve antes de cada bloque. En F4 los ejercicios son los fijos del prototipo y la técnica del día usa la regla del prototipo: primero las no practicadas, en orden seguro, tabla, alcance; después, la de menor acierto. F5 la sustituye por la de MODOS 3.6.
+- **Progreso `hm2:gym`:** ya con el esquema de MODOS 3.12 (`tech: { level, hist, ok, n }` y `sessions`), para que F5 no tenga que migrar. **Cada respuesta se guarda al momento**: si sales a mitad, lo respondido cuenta (MODOS 3.4). La sesión completa se apunta al terminar, como mucho las 30 últimas.
+- **Reproductor:**
+  - El miniplano gana puertas (huecos en la pared, hacen falta para contar puertas), nombres de sala, iconos de rasgo (el ejercicio a5 dice "fíjate en los iconos"), la hora bajo cada ficha y un color propio por ficha.
+  - Las salas se tocan o se eligen con Tab y Enter o espacio, con `aria-pressed`.
+  - "Comprobar" solo se activa con una respuesta. En verdadero/falso y en las opciones, el propio botón responde, como en el prototipo.
+  - La corrección dice ✓ Correcto o ✗ No del todo, la pista del error, la explicación y marca el plano: ✓ en las acertadas, borde discontinuo en las que faltaron y ✗ en las sobrantes, más el camino con las puertas numeradas.
+  - Tras corregir, "Siguiente" recibe el foco; al pasar de ejercicio, el foco va al enunciado. La barra de puntos lleva ✓ o ✗ además del color.
+  - La tabla de objetos es opcional, para anotar, y no cuenta para la respuesta.
+- **Color de acierto `--ok`:** el verde del prototipo (`#2f8a57`) no llega a AA en tema claro (3,9:1 sobre el panel). Se usa `#267349` (5,3:1; texto blanco encima 5,8:1). En oscuro se mantiene `#6fd39b`, con texto oscuro encima (8:1).
+- **"Ir a jugar un caso":** vuelve a la portada con el plano de casos ya desplegado (sin la animación de plegado) y a la vista. Lo hace una opción `startOpen` del plano de casos.
+- **Quitado:** la pantalla provisional de F0 (`ui/pending.ts`), que ya no usa ninguna vista.
+- **Pruebas:**
+  - Unitarias: una por cada regla de error, más los casos sin regla, los aciertos y la reverificación de los 23 ejercicios. En total, 52 nuevas del calentamiento y 3 del miniplano.
+  - E2e (`tests/e2e/gym.spec.ts`), en los tres tamaños del proyecto: sesión completa, fallo con su mensaje, salir a mitad y el enlace `#academia`. **No se ejecutan aquí** (falta `libnspr4.so`).
+
+## Modos: F5 (calentamiento adaptativo)
+
+- **Nivel de cada ejercicio (tabla de MODOS 3.6), calculado y no escrito a mano** (`drillLevel` en `adapt.ts`): 3 si es de hipótesis (`contra`) o hay que usar tres pistas o más; 2 si son dos, o si un `reach` salta dos horas desde la posición conocida; 1 en otro caso. Cuentan "Lo que sabes", los hechos del enunciado y, en los remates, las pistas aún sin usar. Con el banco del prototipo: activación y t1b, t1e, t2b, t3d a nivel 1; t1a, t1c, t1d, t2a, t2c-e, t3a a nivel 2; t3b, t3c, t3e y los tres remates a nivel 3.
+- **Ampliaciones del esquema `hm2:gym` (MODOS 3.12)**, compatibles con lo guardado en F4:
+  - `tech[t].atLevel`: respuestas desde el último cambio de nivel. "8 de los últimos 10 *del nivel actual*" no se puede saber solo con `hist`; al cambiar de nivel vuelve a 0, así que hacen falta 10 respuestas nuevas para el siguiente cambio. Mientras tanto, la ventana es deslizante.
+  - `done`: sesiones completadas en total. `sessions` se recorta a 30 y no sirve para contar "3 sesiones después".
+- **Bajar de nivel** usa la misma ventana que subir (los últimos 10 del nivel actual). Los niveles van de 1 a 3.
+- **Técnica del día:** entre contar puertas, seguro y tabla (los remates tienen su bloque). Primero las no practicadas (orden seguro, tabla, alcance); después, la de menor acierto en sus últimos 20 (a igualdad, la menos practicada). "El día anterior" es la última sesión con fecha anterior a hoy que tuviera técnica del día (las de solo remates no cuentan). La diferencia se mide en puntos enteros: con 15 justos no se repite.
+- **Repaso:** un fallo vuelve cuando se hayan completado 3 sesiones más; un acierto lo saca; fallarlo otra vez lo aplaza sin duplicarlo. Un repaso vencido entra **en su bloque**: el de remate si es remate, el de la técnica del día si es de esa técnica y, si no, la activación. Como mucho 2 repasos por bloque, para no desplazar lo nuevo. Se marcan con "· repaso".
+- **Sin repetir:** dentro de una sesión, nunca. Entre sesiones, `served` por grupo `técnica:nivel`; cuando un grupo se agota, se vacía y vuelve a empezar. Si al nivel pedido no queda nada que sirva, se usa el nivel más cercano (a igual distancia, el más fácil). Lo servido se apunta al empezar la sesión, para que salir a mitad no haga volver los mismos.
+- **Activación:** alterna contar puertas y seguro (empieza por contar puertas), solo `reach` y `tri`, cada una a su nivel menos 1 (mínimo 1).
+- **Diagnóstico (primera vez = sin sesiones ni respuestas):** la activación trae 2 de cada técnica (contar puertas, seguro, tabla, remate) a nivel 1, en ese orden y dos vueltas. La entrada lo explica y el bloque se llama "Diagnóstico".
+- **Tamaño de las sesiones con el banco actual:** el banco del prototipo es pequeño (6 de seguro, 3 remates). Si un bloque no se puede llenar sin repetir dentro de la sesión, se queda más corto: el diagnóstico de la primera vez sale con 8 + 4 + 1 = 13, y "Practicar remates" con 3 en vez de 5. Con el banco de F6 (90 remates) salen los tamaños de MODOS.
+- **Racha:** por días con una sesión completada. Sigue si la última fue ayer, igual si fue hoy, 1 si no. Se guarda la mejor. Se muestra en la entrada y en el informe.
+- **Ficha de detective:** nivel (insignia "Nivel N"), barra de acierto total y "N de M bien".
+- **Informe:** cada técnica practicada con su nivel ("nivel 2", o "nivel 1 → 2" si cambió). En la sesión de remates no hay tabla por bloques (solo tiene uno).
+- **"¿Te quedan dos?" (MODOS 3.10.1):** "quedan dos" = no descartados en la pestaña Caso y sin ✗ en la sala del crimen a la hora del crimen. Es un `<details>` plegado bajo el botón Acusar, con los cinco pasos literales. Aparece en todos los modos, porque el protocolo ayuda siempre; el botón **Practicar remates** solo donde el caso se puede retomar: casos del banco (sueltos y del día) y noches de expediente. No en el tutorial, el modo infinito ni el incendio. Al pulsarlo, el tablero guarda al momento y abre la Academia directamente en una sesión de remates; su entrada y su informe ofrecen **Volver a tu caso**, que lo retoma como "Seguir el caso".
+- **Recomendación tras un caso con fallos (MODOS 3.10.2):** si hubo alguna acusación errónea, el cierre sugiere la técnica del primer arquetipo del caso que esté en la tabla (el primero es el de la deducción clave). "La sala vacía" no está en la tabla: se mira el siguiente y, si no hay, no se sugiere nada. Texto: "Este caso se resolvía con {arquetipo}. Para la próxima vez, practica «{técnica}»", con el botón **Practicar en la Academia**, que abre la Academia con esa técnica como técnica del día (o directamente la sesión de remates si es "Remates con dos"). En el modo infinito también, porque no necesita retomar nada. No en el incendio ni el tutorial.
+- **Invitación en la portada (MODOS 3.10.3):** enlace "Calienta 5 minutos antes del caso del día" bajo los botones principales, con objetivo táctil de 44 px.
+- **Pruebas:** `tests/gym/adapt.test.ts` (historiales sintéticos: subir, bajar, ventana deslizante, técnica del día, no repetir la del día anterior, repaso, racha, diagnóstico), `tests/gym/session.test.ts` (bloques, niveles, diagnóstico, sin repetir entre sesiones, repasos), `tests/gym/bridge.test.ts` (quedan dos, técnica sugerida). E2e ampliado en `tests/e2e/gym.spec.ts`; **no se ejecuta aquí**.
+
+## Modos: F6 (banco de ejercicios generado)
+
+- **Mundo pequeño por paso.** Cada paso de la cadena crítica del solver humano se convierte en un ejercicio sacado de su caso: las pistas de las que depende el paso (siguiendo sus premisas hacia atrás) y las personas que nombran, como mucho 4, con sus objetos si hacen falta y solo las horas necesarias. La verdad del caso sigue siendo un escenario válido del mundo pequeño. Los recuentos se rehacen con las personas del mundo (siguen siendo ciertos).
+- **La respuesta siempre sale de la fuerza bruta**, nunca del solver. Después se exige que el **solver humano**, aplicado al mundo pequeño, llegue exactamente a esa respuesta: si no, el ejercicio pediría algo que no se enseña. Para eso `engine/human.ts` expone `propagateHuman` (niveles 1 a 5 sin exigir caso resuelto; con `crime: false` sin la regla del crimen). Es el mismo núcleo que `solveHuman`, extraído sin cambiar su comportamiento: las suites del solver (exacto, humano, determinismo) pasan igual.
+- **Mínimo de pistas.** Las pistas se quitan de una en una mientras la respuesta no cambie: "Lo que sabes" trae solo lo necesario. En los "no se sabe", lo que no cambia es lo que queda abierto (las salas o los objetos posibles), para que las pistas sigan importando.
+- **Tabla 3.8 en la práctica:**
+  - `reach`: pasos `R3_REACH_FWD`, `R3_REACH_BWD` y `R1_FEAT`, preguntando por la hora del paso y también por las otras horas de esa persona (la cadena sigue).
+  - `tri`: pasos de cruce (`R4_*`, más `R3_STILL` y `R3_MOVED`). Verdadero: la conclusión; falso: su negación; no se sabe: la misma persona y hora (o su objeto), empezando por lo que de verdad pasó. **El "no se sabe" se confirma por fuerza bruta, no con el solver exacto** (que solo responde "¿hay solución única del caso?"): enumerar el mundo pequeño es más directo y es exacto.
+  - `pick`: `R5_OBJ_SINGLE`, `R5_SUS_SINGLE`, `R4_OBJ_WHERE`, `R4_OBJ_WITH` y `R1_NCARRY`, preguntando "¿quién llevaba?", "¿qué llevaba?" o, si queda abierto, con respuesta "no se puede saber". Sin pistas de sala, el ejercicio va sin plano.
+  - `clue`: "quedan dos" con el culpable y **cada sospechoso que el caso descarta** (no solo el penúltimo: así hay remates de nivel 1 y 2 suficientes). Las pistas mínimas que dejan un solo culpable se reparten: las que deciden entre los dos (una es la decisiva y el resto va a "Lo que sabes"), las que descartan a los demás (tachadas) y dos pistas ciertas del caso como distracción.
+  - `contra`: cada descarte de un sospechoso inocente, no solo la pareja a la hora del crimen (el banco no tiene casos Comisario, así que no hay `R6_HYPOTHESIS`). La hipótesis es "fue esa persona"; la pista decisiva, una de las mínimas que la rompen.
+  - En `clue` y `contra`, la fuerza bruta confirma que hay exactamente una pista decisiva.
+- **Nivel automático (ajuste de `drillLevel`):** cuentan las pistas que hay que usar; en `clue`, la decisiva más "Lo que sabes" (las tachadas y las de distracción no). Un salto de dos horas suma como una pista: dos pistas y dos saltos ya es una cadena de nivel 3. Con esto, del prototipo r1 pasa a nivel 1 y r3 a nivel 2.
+- **Filtros de calidad:** "Lo que sabes" con 4 pistas como mucho (6 en remates); nada que la propia pista diga tal cual; los `reach` no pueden dejar casi todas las salas (como mucho 6 y siempre 2 fuera); un "no se sabe" deja entre 2 y 3 opciones; quitando las pistas, la respuesta tendría que cambiar ("ningún ejercicio se responde sin mirar"); la explicación, como mucho 5 frases.
+- **Explicaciones:** una frase por paso del solver humano en el mundo pequeño, con las plantillas del Apéndice C. Donde el apéndice pide la lista de salas que quedan (`R1_FEAT`, `R3_REACH_*`, `R4_TOGETHER`, `R4_ADJ`), se usa tal cual, porque en el ejercicio sí se conoce el estado (en el tablero, `engine/text.ts` nombra las salas descartadas porque no lo guarda). No se repite la pista "X estaba en S a las H" y, si una frase ya dejó las salas de esa hora, la siguiente dice "Una hora después…". Sin referencias "(p. N)". El cierre va en "tú": "Esas son las salas que tienes que marcar", "Lo puedes demostrar: es verdadero", "Es posible, pero no lo puedes demostrar", "La pista decisiva es la N…".
+- **Verificador con poda (`verify.ts`):** la fuerza bruta literal no acaba con 4 personas en planos de 9 salas. `scenarios` sigue siendo exhaustiva, pero filtra los recorridos de cada persona con sus pistas, comprueba cada pista en cuanto están sus personas, lleva recuentos y crimen como contadores y, de quien no influye en la pregunta, deja un recorrido por cada forma de contar. Las respuestas son las mismas: las pruebas lo contrastan con la literal (`scenariosLiteral`) en los 23 del prototipo.
+- **Presupuesto al generar:** cada enumeración del generador tiene un tope de pasos; un candidato que no cabe se descarta (hay de sobra). La validación no tiene tope.
+- **Selección:** 30 por técnica y nivel (360, 90 remates: D4), repartidos por variante (sentido del alcance; V, F y NS; quién, qué y NS; clue y contra) y por mapa, con 3 ejercicios como mucho de un mismo caso. Determinista.
+- **Concordancia en las plantillas (`engine/text.ts`):** al revisar la muestra salieron fallos que también se veían en el tablero: "la llave inglesa… lo llevaba", "Irene mismo", "Lola no es el culpable", "Darío, Irene, Paula no pudo". Ahora el pronombre sale del artículo del objeto (lo, la, las), el género de la persona de un campo nuevo `fem` del reparto (no del papel: "el ama de llaves" es Adela), y las listas de nombres llevan "y" y el verbo en plural. "Juntos" pasa a "juntas" si las dos son mujeres.
+- **Mundos de una sola persona:** se descartan si tienen objetos o recuentos ("quien llevaba el bastón" o "había exactamente una persona" la señalan sin decirlo).
+- **Tamaño:** las explicaciones van con marcas compactas (`{c:N}`, `{r:N}`, `{o:N}`, `{t:HH:MM}`) que se expanden al cargar, y no se escriben los campos vacíos. El fichero queda en lo que dice el informe (MODOS estima ~200 KB sin comprimir y ~40 KB comprimido).
+- **Tamaño de las sesiones:** con el banco generado ya salen los de MODOS: el diagnóstico de la primera vez trae 8 + 5 + 3 = 16 ejercicios y "Practicar remates", 5. El e2e lee el total de la pantalla.
+- **Formato (`public/drills.json`, MODOS 3.7):** índices al reparto global, a `OBJECTS` y a las salas del plano; la respuesta en la forma normalizada (`Answer`) y un campo `src` con el caso y el paso de origen para revisar. La app lo pide al entrar en la Academia; si no llega, usa los 23 del prototipo. Los del prototipo van siempre primero en el banco.
+
+## Modos: F7 (calidad y revisión de móvil)
+
+- **Sin navegador en este entorno.** La revisión de móvil se hizo leyendo el CSS y el marcado y calculando las medidas (alto disponible, escala de los planos, tamaño real de los textos SVG). Los e2e se escriben y los ejecuta el usuario.
+- **Incendio en el móvil (MODOS 2.10.4):** a 390 × 844 la línea de estado quedaba escondida en el scroll interno de la columna superior (informe 90 + plano 285 + horas 56 + estado 45 = 476 px en un hueco de 439). En el incendio, en móvil y en horizontal se quita el informe del caso de encima del plano (la víctima ya está dibujada en él y el texto sigue en la pestaña Caso), la columna superior pasa a 57dvh y el plano a un máximo de 38dvh. Así caben el plano, las horas y el estado también a 360 × 640. Las estrellas del tablero se ocultan en el incendio: no cuentan allí y su hueco hace falta para el reloj.
+- **Plano en horizontal (también en la partida normal):** la regla de pantallas bajas dejaba el plano en 20dvh incluso en la rejilla de dos columnas. A 844 × 390 eso eran 78 px de alto y salas de 9 a 17 px. Ahora esa regla solo vale en una columna, y en la rejilla el plano se lleva `100dvh − 200px`, con las horas a la vista.
+- **Capas del incendio que no cabían:** la pausa, el derrumbe (con la solución desplegada) y la confirmación de salida se centraban con flex y, si no cabían, se cortaban por arriba sin poder desplazarse. Ahora la capa se desplaza y la tarjeta se centra con `margin: auto`.
+- **Miniplano (`ui/planlite.ts`):** sus textos están en unidades del plano (496 de ancho), que a 360 px se ven a ~0,6. Los nombres de sala (12) quedaban en 7 px, el pie de las fichas en 6 px y los números de puerta en 5 px, y los nombres largos se salían de su sala. Ahora el nombre de sala va a 16 (~10 px) y se parte en dos líneas o se reduce para caber; las fichas, sus pies y los números de puerta suben a 13, y los iconos de rasgo a 18. "En llamas" sobre el plano del incendio pasa de 10 a 14.
+- **Calentamiento:**
+  - A 360 px, menos margen lateral (12 px) para que la sala más estrecha de los planos reales pase de 42 a 46 px.
+  - En móvil en horizontal, plano a la izquierda con todo el alto (las salas pasan de 30 a ~60 px).
+  - "Comprobar" y "Siguiente" se quedan pegados abajo, al alcance del pulgar, aunque el ejercicio ocupe más de una pantalla.
+  - La barra dice "Ejercicio 12 de 16 · Técnica del día": si no cabe, se corta el nombre del bloque y no el número.
+- **Accesibilidad:**
+  - La hoja de acusación pasa a ser un diálogo (`role="dialog"`, `aria-modal`, título). El foco va al primer sospechoso, Escape la cierra y el foco vuelve a Acusar.
+  - Al aparecer "En pausa", el foco va a "Seguir".
+  - Contraste: todos los pares de texto cumplen AA en claro, oscuro y fuego. En tema claro, el ámbar (3,2:1) solo se usa en bordes decorativos.
+  - Movimiento reducido: llamas, humo, latido del reloj, transición de entrada y chispas (no arrancan).
+- **e2e:** cuatro tamaños (se añade 360 × 640) en tema claro para todo, y los cuatro en oscuro para los modos nuevos. Además, `tests/e2e/modes-layout.spec.ts` fija lo corregido: plano, horas y estado a la vez; objetivos de 44 px; paleta de fuego con el tema oscuro; derrumbe desplazable; diálogo de acusación; "Comprobar" a la vista; sin scroll horizontal.
+
+## Expediente eliminado
+
+- **Decisión del usuario:** el modo Expediente (tres noches con el mismo reparto, errores y estrellas compartidos) se quita por completo, como si no hubiera existido. Nunca llegó a tener contenido: su tercera noche es de nivel Comisario y el banco publicado no tenía series.
+- **Qué se quitó:**
+  - El botón de la portada, la entrada de "Cómo se juega", "Expedientes completados" del perfil y "Siguiente noche" del cierre.
+  - Los flujos de `main.ts` y el presupuesto de errores compartido en el tablero.
+  - `game/expediente.ts` (`hm2:series`), `store.forceArchive()`, `recordSeriesCompletion` y el campo `series` del perfil.
+  - `'expediente'` de `CaseMode` y `SeriesDef`, y la opción `castOverride` del generador (solo la usaba el expediente).
+  - `public/cases/expedientes.json` y su entrada del manifiesto, su generación, validación e informe en los scripts, sus pruebas y todas sus menciones en el diseño (`DISENO_TECNICO.md`: el banco pasa de 600 a 540 casos).
+- **Sin cambios en la generación:** quitar `castOverride` no toca la rama normal del generador. Se comprobó generando las mismas 13 semillas (Novato, Inspector y Comisario) antes y después: salida idéntica byte a byte. Las suites lentas del solver pasan igual.
+- **Quien ya jugó:** `forgetExpediente()` (en `storage.ts`, al arrancar) borra una sola vez `hm2:series`, las claves `expediente:*` de `hm2:played` y un caso en curso que fuera una noche de expediente (si no, "Seguir el caso" pediría un fichero que ya no existe). `getProfile()` descarta el recuento `series`. Las estrellas ganadas se quedan en el rango: no se pueden separar y quitarlas sería un castigo.
+- **Se mantiene:** el tope de errores infinito (lo usan el tutorial y el Modo Incendio).
+- **Arreglos de paso:**
+  - La pantalla de "agotado" ya no dice "Has resuelto todos los casos" cuando el nivel no tiene ninguno. Ahora distingue tres situaciones: nivel sin casos, casos en escenarios aún bloqueados (cuántos) y todos jugados.
+  - Su botón "Modo infinito" tomaba la dificultad de `bank.cases[0]` y fallaba con un banco vacío; ahora sale del nivel (`diffForMode`).
+  - "Copiar enlace a este caso" solo aparece para ids que `#caso=` sabe abrir (N, I, C, D).
+- **Historia:** las entradas anteriores de este documento, `PLAN.md` y `PLAN_MODOS.md` que hablan del expediente se dejan como estaban: son historia de lo que se hizo. Las referencias de `docs/referencia/` no se tocan.
+
+## Comisario: 5 casos
+
+- **Decisión del usuario:** publicar 5 casos de Comisario, que estaba vacío. No se relanza `bank:build`: reescribiría todo el banco y cambiaría lo que ya se ha jugado.
+- **`pnpm bank:group <modo> <cantidad>` (`scripts/build-group.ts`):** genera un solo grupo y no toca nada más.
+  - Evita las firmas de todos los casos publicados (`scripts/bank-files.ts`, compartido con el incendio) y actualiza solo su entrada del manifiesto.
+  - Reparte el trabajo entre los núcleos: un proceso por intento (`scripts/parallel.ts`, del que ahora también tira el incendio), `BANK_JOBS` para fijarlos.
+  - `--simulacro` genera sin escribir. Si no llega a la cantidad pedida, no escribe nada.
+- **Mismo resultado en serie y en paralelo:** las semillas, el mapa de cada hueco y los intentos están en `scripts/bank-group.ts`, que usan los dos caminos (`build-bank.ts` también). Los huecos van por tandas: dentro de una tanda todos sus intentos corren a la vez y luego se elige en orden, hueco a hueco, el primer intento con un caso nuevo. Comprobado con Novato: en serie, en paralelo y lo publicado dan los mismos casos.
+- **Diferencia con `bank:build`:** si un hueco agota sus 6 intentos se pasa al siguiente hasta tener la cantidad pedida, con un tope de 12 huecos por caso.
+- **Tope de pistas estricto (§11: de 10 a 14):** el generador tolera pasarse del máximo de la dificultad a partir del tercer intento, y una muestra de Comisario salió con 19 pistas.
+  - El grupo Comisario lleva `maxClues: 14` en `bank.config.ts`; usa la opción que ya existía para el incendio, sin tocar el motor.
+  - `bank:validate` lo comprueba para los grupos que lo tienen.
+- **Coste real:** 20 huecos, 120 intentos, 20,5 minutos con 15 procesos (unos 2 minutos de CPU por intento). Dan caso 5 de 20 huecos, menos que el 15 % por semilla medido sin el tope.
+- **Resultado:** C-001 a C-005, todos de nivel 6 (hipótesis, arquetipo "callejón sin salida"), con 10 a 14 pistas.
+  - Escenarios: dos en el tren y uno en el museo (abiertos desde el principio), uno en el hotel (30 estrellas) y uno en el teatro (150).
+  - Mansión y barco no salen porque sus huecos no dieron caso.
+  - Quien empieza puede jugar 3, y la pantalla de agotado le dice que quedan 2 en escenarios bloqueados.
+- **Validación:** `bank:validate`, 434 casos correctos. Pruebas: `tests/bank/comisario.test.ts` y `tests/bank/group.test.ts`, más el e2e `tests/e2e/comisario.spec.ts`.
+
+## Revisión de diseño y responsive (tras F7)
+
+Revisión del código y del CSS de todas las pantallas, sin navegador, con las medidas calculadas. Lo corregido:
+
+- **Hoja de acusación:**
+  - En tableta y escritorio (≥ 700 px) es un diálogo centrado: antes salía pegada al pie también en el ordenador. En el móvil sigue siendo hoja inferior.
+  - El velo de fondo era `--ink` al 45 %, que en tema oscuro y en fuego es claro y aclaraba en vez de oscurecer; ahora es un oscuro fijo.
+  - Tocar fuera de la hoja la cierra.
+- **Nombres de sospechoso en los textos (`.who`):** iban escritos en el color del sospechoso y varios bajaban de 3:1 (ámbar sobre claro 2,2:1, morado sobre oscuro 2,9:1). Ahora van en la tinta del tema, en negrita, con un punto de su color delante, como la ficha del plano. Vale para pistas, pistas del inspector, cadena de deducción, explicaciones del calentamiento y la cabecera de la tabla de objetos.
+- **Iniciales sobre fichas de color** (plano, marcas, pestaña Caso, miniplano): la letra es blanca u oscura según cuál contraste más (`ui/ink.ts`). Con letra blanca siempre, el ámbar se quedaba en 2,4:1; ahora ninguna ficha baja de 4:1.
+- **Tutorial en móvil y tableta:** la guía flotaba encima de la barra de Pista/Acusar y de la hoja. Ahora el tablero (y el plano ampliado, y la hoja desplegada) se encogen lo que ella mide (`--coach-h`, medido con `ResizeObserver`).
+- **Botones con forma de enlace (`.link`):** "Ocultar" y "Salir" de la guía, "Seguir el caso" y "Rejugar el ejemplo" medían unos 20 px de alto. Ahora todos los `.link` tienen 44 px.
+- **Avisos (toast):** en el móvil salían encima de la barra de Acusar; ahora suben por encima de ella (y de la guía del tutorial).
+- **Móvil en horizontal:** la rejilla de dos columnas empieza en 600 px de ancho cuando la pantalla es baja (antes en 700). Un iPhone SE tumbado (667 × 375) se quedaba en una columna con el plano de unos 75 px. Las reglas de una columna son ahora el complemento exacto de la rejilla.
+- **Incendio:**
+  - El plano ampliado tapa la cabecera y con ella el reloj, mientras el tiempo seguía corriendo; ahora lleva su propia copia del reloj.
+  - Las estrellas y el cronómetro de Ajustes se ocultan por CSS: el cronómetro era un segundo reloj y el tablero lo volvía a mostrar en cada repintado.
+  - En móviles de 700 px de alto o menos, la hoja de pistas se quedaba en una sola pista: la parte de arriba vuelve a 52dvh y el plano a 33dvh (siguen cabiendo plano, horas y estado; la hoja muestra dos).
+- **Cronómetro de la cabecera:** no tenía estilo (podía partirse); ahora cifras tabulares y sin salto.
+- **Revisado y bien:** capas y `z-index` (embers 5, hoja desplegada 15, plano ampliado 30, guía 35, acusación 40, pausa 44, derrumbe 46, confirmación 60, avisos 70, velo de modo 90); horas con 4 franjas y tabla de 5 objetos a 360 px; colores fijos del CSS (tema sepia del plano, mapa de la ciudad, sombras).
+- **Pruebas:** `tests/ui/ink.test.ts`; e2e de la acusación (abajo en el móvil, centrada en tableta y escritorio, se cierra tocando fuera). Las comprobaciones de 44 px y de plano/horas/estado de `modes-layout.spec.ts` siguen cubriendo el incendio.
+
 ## Contenido y diseño
 
 - **Corrección de ruta bajo `base: "/hora-muerta/"`.** `Layout.astro` (heredado de la plantilla de Astro) enlazaba `/favicon.svg` y `/favicon.ico` con ruta absoluta; bajo GitHub Pages con `base: "/hora-muerta/"` esos enlaces romperían. Se corrige usando `import.meta.env.BASE_URL` en ambos `<link>`.

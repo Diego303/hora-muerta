@@ -1,17 +1,23 @@
 // Carga del banco pregenerado y servicio sin repetir (§12.2, §12.5): "Caso
 // suelto" sirve el siguiente caso no jugado, en un orden personal por semilla.
 import { rngFromSeed, shuffle } from '../engine/rng';
-import type { BankFile, CaseDef, CaseMode, MapId } from '../engine/types';
+import type { DiffIndex } from '../engine/clues';
+import type { BankFile, CaseDef, CaseMode, LevelMode, MapId } from '../engine/types';
 import { readJSON, writeJSON } from './storage';
 
-const MODE_BY_DIFF: Record<0 | 1 | 2, Exclude<CaseMode, 'diario' | 'expediente'>> = {
+const MODE_BY_DIFF: Record<DiffIndex, LevelMode> = {
   0: 'novato',
   1: 'inspector',
   2: 'comisario',
 };
 
-export function modeForDiff(diff: 0 | 1 | 2): Exclude<CaseMode, 'diario' | 'expediente'> {
+export function modeForDiff(diff: DiffIndex): LevelMode {
   return MODE_BY_DIFF[diff];
+}
+
+/** La dificultad de un nivel, sin depender de que su banco tenga casos. */
+export function diffForMode(mode: LevelMode): DiffIndex {
+  return mode === 'novato' ? 0 : mode === 'inspector' ? 1 : 2;
 }
 
 export async function loadBank(mode: CaseMode): Promise<BankFile> {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { DEFAULT_PROFILE, DEFAULT_SETTINGS, getProfile, getSettings, migrateFromV1, readJSON, saveProfile, saveSettings, writeJSON } from '../../src/game/storage';
+import { DEFAULT_PROFILE, DEFAULT_SETTINGS, forgetExpediente, getProfile, getSettings, migrateFromV1, readJSON, saveProfile, saveSettings, writeJSON } from '../../src/game/storage';
 
 const computeStars = (errors: number, hints: number): number => Math.max(0, 3 - errors - hints);
 
@@ -116,5 +116,49 @@ describe('game/storage', () => {
 
   it('migrateFromV1 sin localStorage (modo privado) no rompe', () => {
     expect(() => migrateFromV1(computeStars)).not.toThrow();
+  });
+
+  describe('forgetExpediente: limpieza del modo Expediente, que ya no existe', () => {
+    beforeEach(() => {
+      // @ts-expect-error se sustituye por una implementación en memoria solo para la prueba
+      globalThis.localStorage = new MemoryStorage();
+    });
+
+    it('borra el progreso de la serie, sus "ya jugados" y una noche en curso', () => {
+      writeJSON('series', { id: 'E-01', index: 1 });
+      writeJSON('played', { '2026.09-a': ['N-001'], 'expediente:2026.09-a': ['E-01'] });
+      writeJSON('game', { caseId: 'E-01-2', mode: 'expediente' });
+      forgetExpediente();
+      expect(localStorage.getItem('hm2:series')).toBeNull();
+      expect(readJSON('played', {})).toEqual({ '2026.09-a': ['N-001'] });
+      expect(readJSON('game', 'sin borrar')).toBeNull();
+    });
+
+    it('no toca un caso en curso de otro modo ni escribe si no hay nada que limpiar', () => {
+      writeJSON('played', { '2026.09-a': ['N-001'] });
+      writeJSON('game', { caseId: 'N-001', mode: 'novato' });
+      let writes = 0;
+      const setItem = localStorage.setItem.bind(localStorage);
+      localStorage.setItem = (key: string, value: string): void => {
+        writes++;
+        setItem(key, value);
+      };
+      forgetExpediente();
+      expect(readJSON('game', null)).toEqual({ caseId: 'N-001', mode: 'novato' });
+      expect(writes).toBe(0);
+    });
+
+    it('el perfil deja de arrastrar el recuento de expedientes', () => {
+      writeJSON('profile', { ...DEFAULT_PROFILE, stars: 12, series: 3 });
+      const profile = getProfile();
+      expect(profile.stars).toBe(12);
+      expect('series' in profile).toBe(false);
+    });
+
+    it('sin localStorage (modo privado) no rompe', () => {
+      // @ts-expect-error se quita para simular el modo privado
+      delete globalThis.localStorage;
+      expect(() => forgetExpediente()).not.toThrow();
+    });
   });
 });

@@ -2,8 +2,10 @@
 // cadena de deducción desplegable, siguiente caso y acciones secundarias.
 import { closingText, keyDeductionText, stepExplanation } from '../engine/text';
 import type { ClueTextContext } from '../engine/text';
-import type { CaseDef, MapDef } from '../engine/types';
-import { hasReachedRank } from '../game/progression';
+import type { Archetype, CaseDef, MapDef } from '../engine/types';
+import { ARCHETYPE_LABELS, hasReachedRank } from '../game/progression';
+import { TECHS } from '../modes/gym/content';
+import type { Tech } from '../modes/gym/types';
 import { computeStars } from '../game/scoring';
 import type { GameStore } from '../game/store';
 import { getProfile } from '../game/storage';
@@ -15,6 +17,8 @@ import { toast } from './toast';
 export interface ClosureOptions {
   onNext: () => void;
   onBackToLanding: () => void;
+  /** Técnica que conviene practicar si se falló alguna acusación (MODOS 3.10.2). */
+  suggestion?: { tech: Tech; arch: Archetype; onGo: () => void } | null;
 }
 
 function starsText(n: number): string {
@@ -33,7 +37,6 @@ export function renderClosure(
   const state = store.getState();
   const stars = computeStars(state.errors, state.hintsUsed);
   const solved = state.result === 'solved';
-  const nextLabel = caseData.mode === 'expediente' ? 'Siguiente noche' : 'Siguiente caso';
 
   const chain = caseData.solve.steps.map((step, i) => `<li>${stepExplanation(step, i, caseData.solve.steps, caseData, ctx)}</li>`).join('');
 
@@ -56,7 +59,15 @@ export function renderClosure(
         <summary>Cadena de deducción</summary>
         <ol>${chain}</ol>
       </details>
-      <button class="btn" id="nextCase">${nextLabel}</button>
+      ${
+        options.suggestion
+          ? `<aside class="train-tip">
+        <p>Este caso se resolvía con ${ARCHETYPE_LABELS[options.suggestion.arch].toLowerCase()}. Para la próxima vez, practica <b>«${TECHS[options.suggestion.tech].name}»</b>.</p>
+        <button class="btn ghost" id="trainBtn">Practicar en la Academia</button>
+      </aside>`
+          : ''
+      }
+      <button class="btn" id="nextCase">Siguiente caso</button>
       <div class="closure-actions">
         <button class="btn ghost" id="reconBtn">Ver la noche en el plano</button>
         <button class="btn ghost" id="shareBtn">Copiar resultado</button>
@@ -75,6 +86,10 @@ export function renderClosure(
   root.querySelector('#backBtn')?.addEventListener('click', () => {
     reconCleanup?.();
     options.onBackToLanding();
+  });
+  root.querySelector('#trainBtn')?.addEventListener('click', () => {
+    reconCleanup?.();
+    options.suggestion?.onGo();
   });
   root.querySelector('#reconBtn')?.addEventListener('click', () => {
     reconCleanup?.();

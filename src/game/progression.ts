@@ -121,14 +121,6 @@ export function recordClosure(profile: Profile, record: ClosureRecord): RecordCl
   return { profile: profileOut, newArchetypes };
 }
 
-/** Un expediente completado (§16.3): las 3 noches, resueltas o no la última
- * al agotar el presupuesto de errores. Cada noche ya sumó sus propias
- * estrellas/recuentos vía recordClosure(); esto solo lleva la cuenta aparte
- * de series terminadas. */
-export function recordSeriesCompletion(profile: Profile): Profile {
-  return { ...profile, series: profile.series + 1 };
-}
-
 /** Tiempo mediano (§16.3), en segundos; `null` si no hay ninguna muestra todavía. */
 export function medianTime(times: number[]): number | null {
   if (times.length === 0) return null;

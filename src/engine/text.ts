@@ -3,7 +3,7 @@
 // cadenas con marcado ligero (nombres coloreados, salas en negrita, horas
 // destacadas, objetos en cursiva) que la interfaz inserta tal cual; el motor no
 // toca el DOM.
-import { MOTIVES, VICTIMS } from './content/cast';
+import { CAST, MOTIVES, VICTIMS } from './content/cast';
 import type { ObjectDef } from './content/cast';
 import type { CaseDef, Clue, Conclusion, FeatureDef, Hour, Obj, Room, RoomDef, Step, Sus } from './types';
 
@@ -41,6 +41,32 @@ function who(suspect: SuspectRef): string {
   return `<span class="who" style="--c:${suspect.color}">${suspect.name}</span>`;
 }
 
+/** Pronombre del objeto: "lo llevaba", "la llevaba", "las llevaba". */
+export function objPronoun(obj: ObjectDef): string {
+  return obj.article === 'el' ? 'lo' : obj.article === 'los' ? 'los' : obj.article;
+}
+
+/** Género de una persona del reparto (CAST.fem); si no está en él, el del artículo de su papel. */
+export function isFemale(suspect: SuspectRef): boolean {
+  const member = CAST.find((m) => m.name === suspect.name);
+  return member ? member.fem === true : suspect.role.startsWith('la ');
+}
+
+/** "el culpable" o "la culpable". */
+export function culpritNoun(suspect: SuspectRef): string {
+  return `${isFemale(suspect) ? 'la' : 'el'} culpable`;
+}
+
+/** "juntos" o "juntas" (masculino si hay algún hombre). */
+function together(a: SuspectRef, b: SuspectRef): string {
+  return isFemale(a) && isFemale(b) ? 'juntas' : 'juntos';
+}
+
+/** "A", "A y B" o "A, B y C". */
+function andList(items: string[]): string {
+  return items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} y ${items[items.length - 1]}`;
+}
+
 function objText(obj: ObjectDef): string {
   return `${obj.article} <span class="obj">${obj.name}</span>`;
 }
@@ -61,6 +87,12 @@ function countPhrase(n: number): string {
   if (n === 0) return 'nadie';
   if (n === 1) return 'una persona';
   return `${COUNT_WORDS[n] ?? n} personas`;
+}
+
+/** "Bruno llevaba el frasco de veneno.": afirmación sobre un portador, que no es un tipo
+ * de pista del juego pero sí un enunciado de los ejercicios del calentamiento. */
+export function carryText(c: Sus, o: Obj, ctx: ClueTextContext): string {
+  return `${who(ctx.suspects[c])} llevaba ${objText(ctx.objects[o])}.`;
 }
 
 /** Texto exacto de una pista (Apéndice B), con los nombres/salas/horas/objetos marcados. */
@@ -238,16 +270,16 @@ export function stepExplanation(step: Step, index: number, allSteps: Step[], cas
     case 'R2_CANT_BE_THERE': {
       const notCulprit = step.concl.find((c): c is Extract<Conclusion, { k: 'notCulprit' }> => c.k === 'notCulprit');
       if (!notCulprit) return '';
-      return `${suspect(notCulprit.c)} no pudo estar en ${room(caseData.rv)} a las ${timeSpan(caseData.td)}, así que no es el culpable.`;
+      return `${suspect(notCulprit.c)} no pudo estar en ${room(caseData.rv)} a las ${timeSpan(caseData.td)}, así que no es ${culpritNoun(ctx.suspects[notCulprit.c])}.`;
     }
     case 'R2_ONLY_ONE': {
       const culprit = culpritOf(step);
       if (culprit !== null) {
-        return `Solo ${suspect(culprit)} pudo estar a solas con la víctima en ${room(caseData.rv)} a las ${timeSpan(caseData.td)}: es el culpable.`;
+        return `Solo ${suspect(culprit)} pudo estar a solas con la víctima en ${room(caseData.rv)} a las ${timeSpan(caseData.td)}: es ${culpritNoun(ctx.suspects[culprit])}.`;
       }
       const iso = isRoomOf(step);
       return iso
-        ? `Ya se sabe que ${suspect(iso.c)} es el culpable: a las ${timeSpan(caseData.td)} tuvo que estar en ${room(caseData.rv)}.`
+        ? `Ya se sabe que ${suspect(iso.c)} es ${culpritNoun(ctx.suspects[iso.c])}: a las ${timeSpan(caseData.td)} tuvo que estar en ${room(caseData.rv)}.`
         : '';
     }
     case 'R2_TAKEN': {
@@ -281,10 +313,11 @@ export function stepExplanation(step: Step, index: number, allSteps: Step[], cas
       const clue = clues[step.cl[0]] as Extract<Clue, { k: 'together' }>;
       const pair = notCulpritSuspects(step);
       if (pair.length >= 2) {
-        return `${suspect(clue.a)} y ${suspect(clue.b)} estaban juntos a las ${timeSpan(clue.t)} (${pista}); si alguno hubiera estado a solas con la víctima, el otro también, y solo hay un culpable. Ninguno de los dos lo es.`;
+        const both = isFemale(ctx.suspects[clue.a]) && isFemale(ctx.suspects[clue.b]);
+        return `${suspect(clue.a)} y ${suspect(clue.b)} estaban ${together(ctx.suspects[clue.a], ctx.suspects[clue.b])} a las ${timeSpan(clue.t)} (${pista}); si ${both ? 'alguna' : 'alguno'} hubiera estado a solas con la víctima, ${both ? 'la otra' : 'el otro'} también, y solo hay un culpable. ${both ? 'Ninguna de las dos' : 'Ninguno de los dos'} lo es.`;
       }
       const clause = resultClause(step, clue.a, clue.t, ctx, 'solo pudo estar en', 'ya no pudo estar en') || resultClause(step, clue.b, clue.t, ctx, 'solo pudo estar en', 'ya no pudo estar en');
-      return `${suspect(clue.a)} y ${suspect(clue.b)} estaban juntos a las ${timeSpan(clue.t)} (${pista})${clause ? `: ${clause}` : ''}.`;
+      return `${suspect(clue.a)} y ${suspect(clue.b)} estaban ${together(ctx.suspects[clue.a], ctx.suspects[clue.b])} a las ${timeSpan(clue.t)} (${pista})${clause ? `: ${clause}` : ''}.`;
     }
     case 'R4_ADJ': {
       const clue = clues[step.cl[0]] as Extract<Clue, { k: 'adj' }>;
@@ -315,7 +348,7 @@ export function stepExplanation(step: Step, index: number, allSteps: Step[], cas
       const whereText = clue.k === 'cat' ? `en ${room(clue.r)}` : featureText(ctx, clue.f, clue.neg);
       const notCarried = notCarryOf(step);
       if (notCarried.length) {
-        return `Quien llevaba ${obj(clue.o)} estaba ${whereText} a las ${timeSpan(clue.t)} (${pista}). ${notCarried.map((x) => suspect(x.c)).join(', ')} no pudo estar allí, así que no lo llevaba.`;
+        return `Quien llevaba ${obj(clue.o)} estaba ${whereText} a las ${timeSpan(clue.t)} (${pista}). ${andList(notCarried.map((x) => suspect(x.c)))} no ${notCarried.length === 1 ? 'pudo' : 'pudieron'} estar allí, así que no ${objPronoun(ctx.objects[clue.o])} ${notCarried.length === 1 ? 'llevaba' : 'llevaban'}.`;
       }
       const iso = isRoomOf(step);
       return `Solo quien llevaba ${obj(clue.o)} pudo estar ${whereText} a las ${timeSpan(clue.t)} (${pista})${iso ? `: por eso ${suspect(iso.c)} estuvo en ${room(iso.r)}` : ''}.`;
@@ -324,10 +357,10 @@ export function stepExplanation(step: Step, index: number, allSteps: Step[], cas
       const clue = clues[step.cl[0]] as Extract<Clue, { k: 'cwith' }>;
       const notCarried = notCarryOf(step);
       if (notCarried.length === 1 && notCarried[0].c === clue.c) {
-        return `Quien llevaba ${obj(clue.o)} estaba con ${suspect(clue.c)} a las ${timeSpan(clue.t)} (${pista}): no podía ser ${suspect(clue.c)} mismo, así que no lo llevaba.`;
+        return `Quien llevaba ${obj(clue.o)} estaba con ${suspect(clue.c)} a las ${timeSpan(clue.t)} (${pista}): no podía ser ${suspect(clue.c)} ${isFemale(ctx.suspects[clue.c]) ? 'misma' : 'mismo'}, así que no ${objPronoun(ctx.objects[clue.o])} llevaba.`;
       }
       if (notCarried.length) {
-        return `Quien llevaba ${obj(clue.o)} estaba con ${suspect(clue.c)} a las ${timeSpan(clue.t)} (${pista}). ${notCarried.map((x) => suspect(x.c)).join(', ')} no pudo coincidir con ${suspect(clue.c)}: no lo llevaba.`;
+        return `Quien llevaba ${obj(clue.o)} estaba con ${suspect(clue.c)} a las ${timeSpan(clue.t)} (${pista}). ${andList(notCarried.map((x) => suspect(x.c)))} no ${notCarried.length === 1 ? 'pudo' : 'pudieron'} coincidir con ${suspect(clue.c)}: no ${objPronoun(ctx.objects[clue.o])} ${notCarried.length === 1 ? 'llevaba' : 'llevaban'}.`;
       }
       const iso = isRoomOf(step);
       return `Solo quien llevaba ${obj(clue.o)} pudo coincidir con ${suspect(clue.c)} a las ${timeSpan(clue.t)} (${pista})${iso ? `: por eso estuvo en ${room(iso.r)}` : ''}.`;
@@ -339,21 +372,21 @@ export function stepExplanation(step: Step, index: number, allSteps: Step[], cas
     }
     case 'R5_OBJ_SINGLE': {
       const carry = carryOf(step);
-      return carry ? `Solo ${suspect(carry.c)} puede llevar ${obj(carry.o)}: lo llevaba.` : '';
+      return carry ? `Solo ${suspect(carry.c)} puede llevar ${obj(carry.o)}: ${objPronoun(ctx.objects[carry.o])} llevaba.` : '';
     }
     case 'R5_SUS_SINGLE': {
       const notCarried = notCarryOf(step);
       const o = notCarried[0]?.o;
       const d = o !== undefined ? whoCarriesExactly(allSteps, index, o) : null;
-      return d !== null && o !== undefined ? `A ${suspect(d)} solo le quedaba ${obj(o)}: lo llevaba.` : 'A alguien solo le quedaba un objeto posible: lo llevaba.';
+      return d !== null && o !== undefined ? `A ${suspect(d)} solo le quedaba ${obj(o)}: ${objPronoun(ctx.objects[o])} llevaba.` : 'A alguien solo le quedaba un objeto posible: lo llevaba.';
     }
     case 'R5_WEAPON': {
       const carry = carryOf(step);
-      return carry ? `El culpable es ${suspect(carry.c)} y llevaba ${obj(carry.o)}: esa es el arma.` : '';
+      return carry ? `${isFemale(ctx.suspects[carry.c]) ? 'La' : 'El'} culpable es ${suspect(carry.c)} y llevaba ${obj(carry.o)}: esa es el arma.` : '';
     }
     case 'R6_HYPOTHESIS': {
       const notCulprit = step.concl.find((x): x is Extract<Conclusion, { k: 'notCulprit' }> => x.k === 'notCulprit');
-      if (notCulprit) return `Suponer que ${suspect(notCulprit.c)} fue el culpable lleva a una contradicción con las pistas: no pudo serlo.`;
+      if (notCulprit) return `Suponer que ${suspect(notCulprit.c)} fue ${culpritNoun(ctx.suspects[notCulprit.c])} lleva a una contradicción con las pistas: no pudo serlo.`;
       const notRoom = step.concl.find((x): x is Extract<Conclusion, { k: 'notRoom' }> => x.k === 'notRoom');
       return notRoom ? `Suponer que ${suspect(notRoom.c)} estuvo en ${room(notRoom.r)} a las ${timeSpan(notRoom.t)} lleva a una contradicción con las pistas: no pudo ser ahí.` : 'Una hipótesis llevaba a una contradicción con las pistas.';
     }

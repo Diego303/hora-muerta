@@ -45,6 +45,7 @@ export function startTutorialCoach(root: HTMLElement, store: GameStore, plan: Pl
   let doneAt: number | null = null;
   let min = false;
   let lastTargetKey: string | null = null;
+  let scrollTimer: ReturnType<typeof setTimeout> | null = null;
 
   function currentStep(): TutorialStep {
     return TUTORIAL_STEPS[i];
@@ -160,7 +161,10 @@ export function startTutorialCoach(root: HTMLElement, store: GameStore, plan: Pl
     if (sels.length && targetKey !== lastTargetKey) {
       lastTargetKey = targetKey;
       const el = root.querySelector(sels[0]) ?? document.querySelector(sels[0]);
-      if (el) setTimeout(() => el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 60);
+      if (el) {
+        if (scrollTimer) clearTimeout(scrollTimer);
+        scrollTimer = setTimeout(() => el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 60);
+      }
     }
   }
 
@@ -200,11 +204,21 @@ export function startTutorialCoach(root: HTMLElement, store: GameStore, plan: Pl
   }, 200);
   const onResize = (): void => placeCoach();
   window.addEventListener('resize', onResize);
+  // En móvil y tableta la guía flota abajo: el tablero se encoge lo que ella ocupe
+  // (--coach-h, ver game.css), así no tapa la barra de Acusar ni la hoja.
+  const rootStyle = document.documentElement.style;
+  const coachSize = new ResizeObserver(() => {
+    rootStyle.setProperty('--coach-h', coach.classList.contains('dock') ? '0px' : `${coach.offsetHeight}px`);
+  });
+  coachSize.observe(coach);
 
   function cleanup(): void {
     unsubscribe();
     clearInterval(autoAdvanceTimer);
+    if (scrollTimer) clearTimeout(scrollTimer);
     window.removeEventListener('resize', onResize);
+    coachSize.disconnect();
+    rootStyle.removeProperty('--coach-h');
     document.body.classList.remove('tut-on');
     root.querySelectorAll('.tut-target').forEach((n) => n.classList.remove('tut-target'));
     root.querySelector('#mapSvg #tutOv')?.remove();

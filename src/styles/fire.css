@@ -1,0 +1,695 @@
+/* Modo Incendio (docs/MODOS.md 2.6 y 2.7). La paleta viene de tokens.css
+   (:root[data-mode='fuego']). Nada parpadea más de 3 veces por segundo: las
+   llamas oscilan con un periodo de 1,2 s y el reloj del último minuto late a 1 Hz. */
+
+/* ---------- capa de fuego sobre el plano ---------- */
+.fl-char {
+  opacity: 0.92;
+}
+.fl-glow {
+  fill: none;
+  stroke: #ff5a1f;
+  stroke-width: 3;
+}
+.fl-heat {
+  fill: #ff8a2a;
+  fill-opacity: 0.32;
+  stroke: #ffb13b;
+  stroke-width: 2.5;
+  stroke-dasharray: 8 5;
+}
+.fl-count {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 20px;
+  fill: #ffe2b8;
+  paint-order: stroke;
+  stroke: #160e0b;
+  stroke-width: 4;
+  font-variant-numeric: tabular-nums;
+}
+/* En unidades del plano (496 de ancho): a 360 px se ve a ~0,65, así que 14 son ~9 px. */
+.fl-tag {
+  font-family: var(--body);
+  font-weight: 800;
+  font-size: 14px;
+  fill: #ffb13b;
+  paint-order: stroke;
+  stroke: #160e0b;
+  stroke-width: 3;
+}
+.fl-flame {
+  fill: #ffb13b;
+  stroke: #ff5a1f;
+  stroke-width: 1.5;
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: flFlicker 1.2s ease-in-out infinite alternate;
+}
+@keyframes flFlicker {
+  from {
+    transform: scale(1, 1);
+  }
+  to {
+    transform: scale(0.9, 1.15);
+  }
+}
+
+/* ---------- reloj en la cabecera ---------- */
+.fire-clock {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.5rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  padding: 2px 8px;
+  border: 2px solid var(--grid);
+  border-radius: 3px;
+  white-space: nowrap;
+}
+/* Copia del reloj en el plano ampliado, que tapa la cabecera (ui/hud.ts). */
+.plan-overlay .fire-clock {
+  position: absolute;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  left: 10px;
+  z-index: 1;
+  background: var(--paper);
+}
+.plan-overlay:has(.fire-clock) {
+  padding-top: calc(56px + env(safe-area-inset-top, 0px));
+}
+.fire-clock.hot {
+  color: var(--on-pencil);
+  background: var(--pencil);
+  border-color: var(--pencil);
+  animation: fireBeat 1s ease-in-out infinite;
+}
+@keyframes fireBeat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+/* ---------- capas "En pausa" y derrumbe ---------- */
+.fire-pause,
+.fire-collapse {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  /* La tarjeta se centra con margin:auto: si no cabe (móvil en horizontal, solución
+     desplegada), se desplaza en vez de cortarse por arriba. */
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, #160e0b 82%, transparent);
+}
+.fire-pause {
+  z-index: 44;
+}
+.fire-collapse {
+  z-index: 46;
+}
+.fire-pause[hidden] {
+  display: none;
+}
+.fire-pause-card,
+.fire-collapse-card {
+  margin: auto;
+  width: min(100%, 420px);
+  background: var(--panel);
+  color: var(--ink);
+  border: 2px solid var(--pencil);
+  border-radius: 4px;
+  padding: 20px;
+}
+.fire-pause-card h2,
+.fire-collapse-card h2 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.9rem;
+  line-height: 1;
+  margin: 0 0 0.4em;
+}
+.fire-pause-card p,
+.fire-collapse-card p {
+  color: var(--ink-2);
+  margin: 0 0 1em;
+}
+.fire-pause-card .btn {
+  width: 100%;
+  justify-content: center;
+}
+.fire-collapse-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.fire-collapse-actions .btn {
+  flex: 1 1 140px;
+  justify-content: center;
+}
+
+/* ---------- lista de edificios ---------- */
+.fire-loading {
+  padding: 40px 20px;
+  color: var(--ink-2);
+}
+.fire-hero {
+  padding: 8px 0 24px;
+}
+.fire-title {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(2.6rem, 10vw, 4.6rem);
+  line-height: 0.95;
+  margin: 0 0 0.3em;
+  background: linear-gradient(180deg, #ffd27a 0%, #ff5a1f 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.fire-hero .lead {
+  color: var(--ink-2);
+  font-size: 1.1rem;
+  max-width: 34em;
+  margin: 0;
+}
+.fire-cases {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  padding-bottom: 40px;
+}
+@media (min-width: 760px) {
+  .fire-cases {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.fcard {
+  border: 2px solid var(--grid);
+  background: var(--panel);
+  border-radius: 4px;
+  padding: 16px 18px;
+}
+.fcard .lv {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--amber);
+}
+.fcard h4 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.7rem;
+  line-height: 1;
+  margin: 0.25em 0 0.4em;
+}
+.fcard p {
+  margin: 0 0 0.7em;
+}
+.fcard .meta {
+  color: var(--ink-2);
+  font-size: 0.92rem;
+}
+.fcard .btn {
+  width: 100%;
+  justify-content: center;
+}
+
+/* ---------- humo de los primeros 45 s ---------- */
+.fl-smoke {
+  fill: #6d5a50;
+  fill-opacity: 0.32;
+  animation: flSmoke 4s ease-in-out infinite alternate;
+}
+@keyframes flSmoke {
+  from {
+    fill-opacity: 0.22;
+  }
+  to {
+    fill-opacity: 0.4;
+  }
+}
+
+/* ---------- cabecera: barra del edificio y línea de estado ---------- */
+.fire-gbar {
+  position: relative;
+}
+/* En el incendio manda su reloj: ni las estrellas del caso normal (el incendio da las
+   suyas al resolver) ni el cronómetro de Ajustes, que sería un segundo reloj. */
+.fire-gbar .stars,
+.fire-gbar .timer {
+  display: none;
+}
+.firebar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 4px;
+  background: color-mix(in srgb, var(--pencil) 22%, transparent);
+  pointer-events: none;
+}
+.firebar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #ffb13b, #ff5a1f);
+  transition: width 0.25s linear;
+}
+.fire-status {
+  flex: none;
+  margin: 6px 10px 0;
+  padding: 6px 10px;
+  font-size: 0.88rem;
+  line-height: 1.35;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--pencil) 14%, var(--panel));
+  border-left: 3px solid var(--pencil);
+  border-radius: 2px;
+}
+
+/* Solo para lectores de pantalla. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- pistas que arden ---------- */
+.fire-photos {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-weight: 700;
+  color: var(--amber);
+}
+.fire-photos svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+.fire-clue {
+  align-items: center;
+}
+.fc-photo {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--grid);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--ink);
+}
+.fc-photo svg {
+  width: 22px;
+  height: 22px;
+}
+.fc-fuse,
+.fc-saved,
+.fc-burning {
+  flex: none;
+  font-weight: 700;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.fc-fuse {
+  color: var(--on-pencil);
+  background: var(--amber);
+}
+.fc-saved {
+  color: var(--ink);
+  border: 2px solid var(--amber);
+}
+.fc-saved::before {
+  content: '✓ ';
+}
+.fc-burning {
+  color: var(--on-pencil);
+  background: var(--pencil);
+}
+.fc-heat .clue-text {
+  box-shadow: inset 3px 0 0 var(--amber);
+}
+.fc-burning .clue-text {
+  box-shadow: inset 3px 0 0 var(--pencil);
+  opacity: 0.85;
+}
+.clue-row.burnt {
+  align-items: center;
+  min-height: 44px;
+  padding: 0 4px;
+  color: var(--ink-2);
+}
+.clue-row.burnt .n {
+  font-weight: 700;
+  width: 44px;
+  flex: none;
+  text-align: center;
+}
+.burnt-label {
+  flex: none;
+  font-style: italic;
+}
+/* Ceniza: textura, no solo color, para que "quemada" se distinga sin ver el tono. */
+.ash {
+  flex: 1;
+  height: 10px;
+  border-radius: 2px;
+  background: repeating-linear-gradient(135deg, #3a2a22 0 4px, #1f140f 4px 8px);
+}
+
+/* ---------- diálogo de confirmación ---------- */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  overflow-y: auto;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(10, 6, 4, 0.7);
+}
+.confirm-card {
+  margin: auto;
+  width: min(100%, 400px);
+  background: var(--panel);
+  color: var(--ink);
+  border: 2px solid var(--pencil);
+  border-radius: 4px;
+  padding: 20px;
+}
+.confirm-card h2 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.7rem;
+  line-height: 1;
+  margin: 0 0 0.4em;
+}
+.confirm-card p {
+  margin: 0 0 1em;
+  color: var(--ink-2);
+}
+.confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.confirm-actions .btn {
+  flex: 1 1 140px;
+  justify-content: center;
+}
+
+/* ---------- derrumbe: la solución ---------- */
+.fire-solution {
+  margin: 0 0 1em;
+  padding: 10px 12px;
+  border-left: 3px solid var(--amber);
+  background: var(--paper);
+}
+.fire-solution .closing {
+  color: var(--ink);
+  margin: 0 0 0.8em;
+}
+
+/* ---------- cierre: "Resuelto entre las llamas" ---------- */
+.fire-end {
+  padding-top: 24px;
+  padding-bottom: 40px;
+}
+.fire-end-card {
+  max-width: 640px;
+  margin: 0 auto;
+}
+.fire-end-kicker {
+  color: var(--amber);
+  font-weight: 700;
+  margin: 0;
+}
+.fire-end h1 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(2.4rem, 9vw, 4rem);
+  line-height: 0.95;
+  margin: 0.15em 0 0.4em;
+  outline: none;
+}
+.fire-end .closing {
+  font-size: 1.05rem;
+}
+.fire-left {
+  font-size: 1.15rem;
+}
+.medals {
+  list-style: none;
+  padding: 0;
+  margin: 1em 0;
+  display: grid;
+  gap: 8px;
+}
+.medal {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 2px solid var(--grid);
+  border-radius: 4px;
+  color: var(--ink-2);
+}
+.medal.got {
+  border-color: var(--amber);
+  color: var(--ink);
+}
+.medal-mark {
+  flex: none;
+  width: 1.6em;
+  height: 1.6em;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  border: 2px solid currentColor;
+}
+.medal.got .medal-mark {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: var(--on-pencil);
+}
+.fire-stars {
+  font-weight: 700;
+  color: var(--amber);
+}
+.fire-end-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+.fire-end-actions .btn {
+  flex: 1 1 180px;
+  justify-content: center;
+}
+
+/* ---------- chispas ---------- */
+.fire-embers {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* ---------- sala del incendio ---------- */
+.fire-hero {
+  display: grid;
+  gap: 20px;
+}
+@media (min-width: 900px) {
+  .fire-hero {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 40px;
+  }
+}
+.fire-rules {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.fire-rules li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  line-height: 1.4;
+}
+.fire-rules svg {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  color: var(--amber);
+  margin-top: 1px;
+}
+.fire-h2 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.8rem;
+  margin: 28px 0 10px;
+}
+.fire-filter {
+  margin-bottom: 16px;
+}
+.fcard {
+  display: grid;
+  gap: 14px;
+}
+@media (min-width: 520px) {
+  .fcard {
+    grid-template-columns: 160px minmax(0, 1fr);
+    align-items: start;
+  }
+}
+.fcard[hidden] {
+  display: none;
+}
+.fire-preview {
+  background: var(--paper);
+  border-radius: 3px;
+}
+.fire-preview .pl-room {
+  stroke-width: 3;
+}
+.fl-preview-flame path {
+  fill: #ffc24d;
+  stroke: #ff5a1f;
+  stroke-width: 1.5;
+}
+.fire-offers {
+  display: grid;
+  gap: 24px;
+  padding-bottom: 40px;
+}
+@media (min-width: 1100px) {
+  .fire-offers {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+.fire-level[hidden] {
+  display: none;
+}
+.fire-level-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.4rem;
+  margin: 0 0 10px;
+}
+.fire-level-h span {
+  font-family: var(--body);
+  font-weight: 400;
+  font-size: 0.9rem;
+  color: var(--ink-2);
+}
+.fire-done {
+  border: 2px dashed var(--grid);
+  border-radius: 4px;
+  padding: 14px 16px;
+  margin: 0;
+}
+.fire-solved {
+  margin-top: 14px;
+}
+.fire-solved summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 700;
+}
+.fire-solved .fire-cases {
+  padding: 10px 0 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+.fcard .best {
+  font-size: 0.95rem;
+}
+
+/* ---------- mesa de trabajo con fuego en el móvil (MODOS 2.10.4) ----------
+   A 390 × 844 tienen que verse a la vez el plano, las horas y la línea de estado.
+   El informe del caso (víctima, sala, hora) se quita de encima del plano: la víctima
+   ya está dibujada en él y el texto sigue en la pestaña Caso. */
+@media (max-width: 599px), (max-width: 699px) and (min-height: 560px) {
+  .fire-game .brief {
+    display: none;
+  }
+  .fire-game .game-main {
+    max-height: 57dvh;
+  }
+  .fire-game .fire-status {
+    font-size: 0.85rem;
+  }
+  .fire-game .plan-wrap .plan {
+    max-height: min(38dvh, 46vh);
+  }
+}
+/* Móviles bajos (p. ej. 360 × 640): con 57dvh arriba la hoja de pistas se quedaba en una
+   sola pista. Se vuelve a los 52dvh del caso normal y el plano cede un poco: siguen
+   cabiendo plano, horas y estado (219 + 52 + 55 = 326 de 333 px) y la hoja muestra dos. */
+@media (max-width: 599px) and (max-height: 700px), (max-width: 699px) and (min-height: 560px) and (max-height: 700px) {
+  .fire-game .game-main {
+    max-height: 52dvh;
+  }
+  .fire-game .plan-wrap .plan {
+    max-height: 33dvh;
+  }
+}
+@media (min-width: 600px) and (max-height: 559px) {
+  .fire-game .brief {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fl-flame,
+  .fl-smoke,
+  /* Copia del reloj en el plano ampliado, que tapa la cabecera (ui/hud.ts). */
+.plan-overlay .fire-clock {
+  position: absolute;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  left: 10px;
+  z-index: 1;
+  background: var(--paper);
+}
+.plan-overlay:has(.fire-clock) {
+  padding-top: calc(56px + env(safe-area-inset-top, 0px));
+}
+.fire-clock.hot {
+    animation: none;
+  }
+}

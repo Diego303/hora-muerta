@@ -1,7 +1,9 @@
 .top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 8px 12px;
   padding: 18px 0;
 }
 .mark {
@@ -21,6 +23,8 @@
 }
 .top nav {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
   align-items: center;
   white-space: nowrap;
@@ -65,6 +69,19 @@
   flex-wrap: wrap;
   gap: 12px;
   align-items: center;
+}
+/* En móvil, "Jugar el caso del día" ocupa su propia fila; el resto se reparte debajo (§1.4). */
+@media (max-width: 639px) {
+  .hero .ctas .cta-main {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+}
+.warmup {
+  margin: 10px 0 0;
+}
+.warmup .link {
+  font-size: 0.95rem;
 }
 .resume {
   margin-top: 18px;

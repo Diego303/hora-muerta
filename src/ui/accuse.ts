@@ -2,16 +2,28 @@
 // Acusar. Los descartados aparecen atenuados, pero se pueden elegir. Un error
 // no revela qué parte falló. Qué pasa con el resultado (cerrar el caso, avisar
 // cuántas quedan) lo decide quien llama: el presupuesto de errores no es
-// siempre "2 por caso" (un expediente lo comparte entre sus 3 noches, §13).
+// siempre "2 por caso" (el Modo Incendio resta tiempo en vez de errores).
 import type { ClueTextContext } from '../engine/text';
 import type { AccusationOutcome } from '../game/scoring';
 import type { GameStore } from '../game/store';
+import { remainingSuspects, TWO_LEFT_STEPS } from '../modes/gym/bridge';
 
 export interface AccuseOptions {
-  /** Texto del contador de errores ("Errores: 1/2", o para un expediente
-   * "Quedan 2 acusaciones para todo el expediente"). */
+  /** Texto del contador de errores ("Errores: 1/2", o en el Modo Incendio
+   * "Cada acusación errónea resta 30 segundos."). */
   errorsLabel: string;
   onOutcome: (outcome: AccusationOutcome) => void;
+  /** "Practicar remates" (MODOS 3.10.1): solo donde el caso en curso se puede guardar y retomar. */
+  onPracticeRemates?: () => void;
+}
+
+/** "¿Te quedan dos?": el protocolo de cinco comprobaciones, plegado, y la práctica de remates. */
+function twoLeftMarkup(withPractice: boolean): string {
+  return `<details class="two-left">
+      <summary>¿Te quedan dos?</summary>
+      <ol>${TWO_LEFT_STEPS.map((s) => `<li>${s}</li>`).join('')}</ol>
+      ${withPractice ? '<button class="btn ghost" id="practiceRemates" type="button">Practicar remates</button>' : ''}
+    </details>`;
 }
 
 export function openAccuseSheet(ctx: ClueTextContext, store: GameStore, options: AccuseOptions): void {
@@ -25,20 +37,24 @@ export function openAccuseSheet(ctx: ClueTextContext, store: GameStore, options:
       return `<button class="pal accsel${dim}" data-sus="${i}" style="--c:${s.color}" aria-pressed="false">${s.name}</button>`;
     })
     .join('');
+  const twoLeft = remainingSuspects(state.caseData, state.discarded, state.marks).length === 2;
   const objOptions = ctx.objects.map((o, i) => `<button class="chip accsel" data-obj="${i}" aria-pressed="false">${o.label}</button>`).join('');
 
   overlay.innerHTML = `
-    <div class="accuse-sheet">
+    <div class="accuse-sheet" role="dialog" aria-modal="true" aria-labelledby="accuseT">
       <button class="icon-btn accuse-close" aria-label="Cerrar">✕</button>
-      <h2>Acusación</h2>
+      <h2 id="accuseT">Acusación</h2>
       <p class="errs">${options.errorsLabel}</p>
       <p class="lbl">¿Quién fue?</p>
       <div class="accuse-row">${susOptions}</div>
       <p class="lbl">¿Con qué?</p>
       <div class="accuse-row">${objOptions}</div>
       <button class="btn" id="accuseSubmit" disabled>Acusar</button>
+      ${twoLeft ? twoLeftMarkup(Boolean(options.onPracticeRemates)) : ''}
     </div>
   `;
+  // Al cerrar, el foco vuelve a donde estaba (el botón Acusar).
+  const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   document.body.appendChild(overlay);
 
   let selSus: number | null = null;
@@ -63,10 +79,27 @@ export function openAccuseSheet(ctx: ClueTextContext, store: GameStore, options:
     });
   });
 
-  function close(): void {
-    overlay.remove();
+  function onKey(e: KeyboardEvent): void {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    close();
   }
+  function close(): void {
+    document.removeEventListener('keydown', onKey);
+    overlay.remove();
+    if (previous?.isConnected) previous.focus();
+  }
+  document.addEventListener('keydown', onKey);
   overlay.querySelector('.accuse-close')?.addEventListener('click', close);
+  // Tocar el velo, fuera de la hoja, también la cierra.
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) close();
+  });
+  overlay.querySelector<HTMLButtonElement>('[data-sus]')?.focus();
+  overlay.querySelector('#practiceRemates')?.addEventListener('click', () => {
+    close();
+    options.onPracticeRemates?.();
+  });
 
   submit?.addEventListener('click', () => {
     if (selSus === null || selObj === null) return;

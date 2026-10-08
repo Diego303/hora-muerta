@@ -3,9 +3,9 @@
   "counts": {
     "novato": 170,
     "inspector": 164,
-    "comisario": 0,
+    "comisario": 5,
     "diario": 55,
-    "expediente": 0
+    "incendio": 40
   },
   "files": {
     "novato.json": {
@@ -17,16 +17,16 @@
       "hash": "bweus2"
     },
     "comisario.json": {
-      "count": 0,
-      "hash": "17eznqy"
+      "count": 5,
+      "hash": "naiz2u"
     },
     "diario.json": {
       "count": 55,
       "hash": "1o9f513"
     },
-    "expedientes.json": {
-      "count": 0,
-      "hash": "183pn0b"
+    "incendio.json": {
+      "count": 40,
+      "hash": "byqufd"
     }
   }
 }

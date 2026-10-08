@@ -1,7 +1,7 @@
-import type { Graph, MapDef } from './types';
+import type { FloorPlan, Graph } from './types';
 
-/** Construye el grafo (adyacencia, matriz, rasgos, distancias) a partir de un MapDef. */
-export function buildGraph(map: MapDef): Graph {
+/** Construye el grafo (adyacencia, matriz, rasgos, distancias) a partir de un plano. */
+export function buildGraph(map: FloorPlan): Graph {
   const n = map.rooms.length;
   const index = new Map<string, number>(map.rooms.map((room, i) => [room.id, i]));
 

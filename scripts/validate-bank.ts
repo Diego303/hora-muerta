@@ -17,8 +17,10 @@ import { solveHuman } from '../src/engine/human';
 import type { HumanContext } from '../src/engine/human';
 import { enumeratePaths } from '../src/engine/paths';
 import { clueText, plainText } from '../src/engine/text';
-import type { BankFile, CaseDef, MapDef, SeriesDef } from '../src/engine/types';
-import { BANK_GROUPS, EXPEDIENTE_ID_PREFIX, MAP_QUOTA_TOLERANCE } from './bank.config';
+import type { BankFile, CaseDef, MapDef } from '../src/engine/types';
+import { BANK_GROUPS, FIRE_GROUPS, MAP_QUOTA_TOLERANCE } from './bank.config';
+import { fireCaseErrors } from './fire-bank';
+import type { FireCase } from '../src/modes/fire/types';
 
 const OUT_DIR = path.join(process.cwd(), 'public', 'cases');
 
@@ -112,6 +114,8 @@ function main(): void {
     const bank = readJSON<BankFile>(`${group.mode}.json`);
     for (const c of bank.cases) {
       validateCase(c, errors);
+      // Tope estricto del grupo (Comisario: 14 pistas, §11).
+      if (group.maxClues !== undefined && c.clues.length > group.maxClues) errors.push(`${c.id}: ${c.clues.length} pistas (máximo ${group.maxClues})`);
       allCases.push(c);
       const owner = signatures.get(c.sig);
       if (owner) errors.push(`${c.id}: firma repetida con ${owner}`);
@@ -120,22 +124,25 @@ function main(): void {
     reportMapQuota(group.mode, bank.cases, warnings);
   }
 
-  const expedienteFile = path.join(OUT_DIR, 'expedientes.json');
-  if (existsSync(expedienteFile)) {
-    const { series } = JSON.parse(readFileSync(expedienteFile, 'utf8')) as { series: SeriesDef[] };
-    for (const s of series) {
-      if (!s.id.startsWith(EXPEDIENTE_ID_PREFIX)) errors.push(`${s.id}: prefijo de id inesperado`);
-      if (s.cases.length !== 3) errors.push(`${s.id}: la serie no tiene 3 casos`);
-      for (const c of s.cases) {
-        validateCase(c, errors);
-        allCases.push(c);
-        const owner = signatures.get(c.sig);
-        if (owner) errors.push(`${c.id}: firma repetida con ${owner}`);
-        else signatures.set(c.sig, c.id);
-      }
+  // Modo Incendio (docs/MODOS.md 2.5): además de todo lo del caso normal, el foco,
+  // los tiempos, los textos y las garantías de justicia.
+  const fireFile = path.join(OUT_DIR, 'incendio.json');
+  if (existsSync(fireFile)) {
+    const { cases: fireCases } = JSON.parse(readFileSync(fireFile, 'utf8')) as { cases: FireCase[] };
+    for (const f of fireCases) {
+      validateCase(f.caseData, errors);
+      for (const e of fireCaseErrors(f)) errors.push(`${f.caseData.id}: ${e}`);
+      allCases.push(f.caseData);
+      const owner = signatures.get(f.caseData.sig);
+      if (owner) errors.push(`${f.caseData.id}: firma repetida con ${owner}`);
+      else signatures.set(f.caseData.sig, f.caseData.id);
+    }
+    for (const g of FIRE_GROUPS) {
+      const n = fireCases.filter((f) => f.fire.level === g.level).length;
+      if (n !== g.count) warnings.push(`incendio: ${g.level} tiene ${n} casos (objetivo ${g.count}).`);
     }
   } else {
-    warnings.push('expedientes.json no existe todavía.');
+    warnings.push('incendio.json no existe todavía.');
   }
 
   console.log(`[validate-bank] ${allCases.length} casos comprobados.`);

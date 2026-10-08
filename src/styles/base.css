@@ -89,6 +89,10 @@ svg {
   text-decoration: underline;
   text-underline-offset: 3px;
   color: var(--ink-2);
+  /* Objetivo táctil de 44 px aunque parezca un enlace de texto. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
 }
 .icon-btn {
   background: none;
@@ -111,7 +115,7 @@ svg {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(24px + var(--toast-lift, 0px) + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   background: var(--ink);
   color: var(--paper);
@@ -121,6 +125,195 @@ svg {
   font-weight: 700;
   max-width: calc(100vw - 32px);
   text-align: center;
+}
+
+/* ---------- botón de acción de peligro (Modo Incendio) ---------- */
+.btn.danger {
+  background: var(--pencil);
+  border-color: var(--pencil);
+  color: var(--on-pencil);
+}
+.btn.danger:hover {
+  filter: brightness(1.08);
+}
+.btn svg {
+  width: 1.15em;
+  height: 1.15em;
+  flex: none;
+}
+
+/* ---------- destello al cambiar de modo visual (core/visualmode.ts) ---------- */
+.mode-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+  opacity: 0;
+}
+.mode-veil.ignite {
+  background: radial-gradient(ellipse at 50% 100%, #ffb13b 0%, #ff5a1f 35%, #160e0b 85%);
+  animation: veilIgnite 0.7s ease-out forwards;
+}
+.mode-veil.fade {
+  background: var(--paper);
+  animation: veilFade 0.3s ease-out forwards;
+}
+@keyframes veilIgnite {
+  0% {
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes veilFade {
+  0% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mode-veil {
+    display: none;
+  }
+}
+
+/* Los avisos salen por encima de la barra de Pista/Acusar del tablero en el móvil (y
+   de la guía del tutorial si está abierta), en vez de taparla. */
+@media (max-width: 1099px) {
+  body:has(.actionbar) {
+    --toast-lift: 76px;
+  }
+  body.tut-on:has(.actionbar) {
+    --toast-lift: calc(76px + var(--coach-h, 0px));
+  }
+}
+
+/* ---------- nombres de sospechoso en los textos ---------- */
+/* El nombre va en la tinta del tema (se lee en claro, oscuro y fuego) con un punto de
+   su color delante, como su ficha en el plano. Antes el nombre entero iba en su color
+   y algunos bajaban de 3:1 (ámbar sobre claro, morado sobre oscuro). */
+.who {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.who::before {
+  content: '';
+  display: inline-block;
+  width: 0.62em;
+  height: 0.62em;
+  margin-right: 0.28em;
+  border-radius: 50%;
+  background: var(--c, currentColor);
+  vertical-align: 0.04em;
+}
+
+/* ---------- miniplano compartido (ui/planlite.ts) ---------- */
+.planlite {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+}
+.pl-room {
+  fill: var(--room);
+  stroke: var(--wall);
+  stroke-width: 2.5;
+}
+.pl-heat {
+  pointer-events: none;
+}
+.pl-room-box[data-room] {
+  cursor: pointer;
+}
+.pl-room-box[data-room]:focus-visible {
+  outline: none;
+}
+.pl-room-box[data-room]:focus-visible .pl-room {
+  stroke: var(--focus);
+  stroke-width: 4.5;
+}
+.pl-selected {
+  fill: none;
+  stroke: var(--amber);
+  stroke-width: 3.5;
+  pointer-events: none;
+}
+.pl-miss {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.5;
+  stroke-dasharray: 6 5;
+  pointer-events: none;
+}
+.pl-no {
+  fill: none;
+  stroke: var(--pencil);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.pl-mark {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 22px;
+  pointer-events: none;
+}
+.pl-ok {
+  fill: var(--ink);
+}
+.pl-bad {
+  fill: var(--pencil);
+}
+.pl-path {
+  stroke: var(--amber);
+  stroke-width: 4;
+  stroke-dasharray: 10 7;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.pl-door-dot {
+  fill: var(--paper);
+  stroke: var(--ink);
+  stroke-width: 1.2;
+}
+.pl-door text {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 13px;
+  fill: var(--ink);
+}
+.pl-door-gap {
+  fill: var(--room);
+}
+/* El tamaño lo pone ui/planlite.ts sala a sala (atributo font-size) para que el nombre quepa. */
+.pl-label {
+  font-family: var(--body);
+  font-weight: 700;
+  fill: var(--ink-2);
+}
+.pl-ficon {
+  color: var(--ink-2);
+}
+.pl-token-caption {
+  font-family: var(--body);
+  font-size: 13px;
+  font-weight: 700;
+  fill: var(--ink);
+  paint-order: stroke;
+  stroke: var(--room);
+  stroke-width: 3px;
+}
+.pl-token-label {
+  font-family: var(--body);
+  font-size: 13px;
+  font-weight: 700;
+  pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

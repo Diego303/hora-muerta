@@ -19,7 +19,7 @@
 9. Solver humano (cómo razona una persona)
 10. Deducción clave y arquetipos
 11. Dificultad
-12. Banco de casos (200 a 600)
+12. Banco de casos (200 a 540)
 13. Modos de juego
 14. Puntuación, acusación y cierre
 15. Pista del inspector (sistema de ayudas)
@@ -47,7 +47,7 @@
 5. **Móvil primero.** Toda la experiencia debe ser cómoda con una mano en un teléfono vertical de 360 px de ancho. El ordenador es una mejora, no el diseño base.
 6. **Pizarra sencilla.** Marcar, Tiza y Ver. No se añaden herramientas complejas; solo mejoras que reducen esfuerzo mecánico (la estela de horas contiguas).
 
-**Duración objetivo:** Novato de 3 a 5 min, Inspector de 6 a 10 min, Comisario de 10 a 18 min, Expediente de 3 casos entre 15 y 25 min.
+**Duración objetivo:** Novato de 3 a 5 min, Inspector de 6 a 10 min, Comisario de 10 a 18 min.
 
 ---
 
@@ -57,7 +57,7 @@
 |---|---|---|
 | Reglas base | 3 reglas | **Igual**, sin cambios |
 | Escenarios | Mansión, tren, museo | **6 escenarios**: se añaden hotel, barco y teatro, cada uno con "personalidad lógica" |
-| Origen de los casos | Generados en el navegador al momento | **Banco curado de 600 casos** generado offline y servido como JSON. El generador en el navegador queda como "modo infinito" |
+| Origen de los casos | Generados en el navegador al momento | **Banco curado de 540 casos** generado offline y servido como JSON. El generador en el navegador queda como "modo infinito" |
 | Verificación | Solver exacto (unicidad) | Solver exacto **más solver humano** por niveles |
 | Dificultad | Por número de pistas y pesos de tipo | Por **profundidad del razonamiento** (nivel máximo y puntuación de la cadena) con topes de pistas |
 | Pistas | 14 tipos; 36% de posiciones directas en Novato; Comisario hasta 22 pistas | 16 tipos (se añaden **cruzó una puerta** y **no se movió entre dos horas**), topes por tipo, Comisario de 10 a 14 pistas |
@@ -66,7 +66,7 @@
 | Cierre | Frase final y reconstrucción | Reconstrucción, **deducción clave**, cadena de deducción desplegable, motivo |
 | Pizarra | Marcar / Tiza / Ver, tiza por hora | **Igual** más **estela** de las horas contigua anterior y siguiente, y ayuda de movimiento opcional en Novato |
 | Siguiente caso | Se genera al pulsar (hasta 3 s de espera) | **Instantáneo** (banco) o pregenerado en segundo plano (modo infinito) |
-| Modos | Caso suelto, caso del día | Caso suelto, caso del día, **Expediente de 3 casos**, modo infinito |
+| Modos | Caso suelto, caso del día | Caso suelto, caso del día, modo infinito |
 | Progresión | Contador de resueltos y racha diaria | **Rango de detective**, desbloqueo de escenarios, archivo de arquetipos, rachas |
 | Interfaz móvil | Columna única con scroll largo | **Mesa de trabajo**: plano fijo arriba, hoja inferior con pestañas, barra de acciones fija |
 
@@ -134,7 +134,7 @@ Adela (el ama de llaves), Bruno (el sobrino), Celia (la pianista), Darío (el ch
 
 ### 4.4 Combinatoria
 
-Por caso: 6 escenarios × C(18,5) = 8.568 repartos × P(10,5) = 30.240 asignaciones de objetos × cientos de noches válidas × múltiples conjuntos de pistas. El espacio es prácticamente infinito; el banco selecciona los 600 mejores según calidad y variedad (sección 12).
+Por caso: 6 escenarios × C(18,5) = 8.568 repartos × P(10,5) = 30.240 asignaciones de objetos × cientos de noches válidas × múltiples conjuntos de pistas. El espacio es prácticamente infinito; el banco selecciona los 540 mejores según calidad y variedad (sección 12).
 
 ---
 
@@ -203,7 +203,7 @@ type Conclusion =
 interface CaseDef {
   v: 2;                          // versión del formato
   id: string;                    // "N-017", "I-142", "C-033", "D-012", "E-07-2"
-  mode: 'novato'|'inspector'|'comisario'|'diario'|'expediente';
+  mode: 'novato'|'inspector'|'comisario'|'diario';
   diff: 0|1|2;
   map: MapDef['id'];
   cast: number[];                // índices en el reparto global (longitud N)
@@ -224,7 +224,6 @@ interface CaseDef {
 }
 
 interface BankFile { version: string; mode: CaseDef['mode']; cases: CaseDef[]; }
-interface SeriesDef { id: string; map: MapDef['id']; cast: number[]; cases: CaseDef[]; } // Expediente
 ```
 
 ---
@@ -496,9 +495,9 @@ Los arquetipos se usan para: la frase de la deducción clave, el archivo de arqu
 
 ---
 
-## 12. Banco de casos (200 a 600)
+## 12. Banco de casos (200 a 540)
 
-### 12.1 Composición por defecto (600 casos)
+### 12.1 Composición por defecto (540 casos)
 
 | Grupo | Casos | Uso |
 |---|---|---|
@@ -506,10 +505,11 @@ Los arquetipos se usan para: la frase de la deducción clave, el archivo de arqu
 | Inspector | 190 | Caso suelto |
 | Comisario | 120 | Caso suelto |
 | Diario | 60 | Caso del día (nivel Inspector) |
-| Expediente | 20 series × 3 = 60 | Modo Expediente |
-| **Total** | **600** | |
+| **Total** | **540** | |
 
-La composición es configurable en `scripts/bank.config.ts`. El mínimo razonable es 200 (70 / 70 / 40 / 20 sin expedientes).
+La composición es configurable en `scripts/bank.config.ts`. El mínimo razonable es 200 (70 / 70 / 40 / 20).
+
+**Publicado ahora:** Novato 170, Inspector 164, Comisario 5 y Diario 55. Comisario se genera aparte, en paralelo, con `pnpm bank:group comisario <n>`, y con su tope de 14 pistas estricto.
 
 **Cuotas de variedad dentro de cada grupo:**
 
@@ -527,13 +527,12 @@ para cada grupo y cada hueco de cuota:
   semilla = `${bankVersion}|${grupo}|${índice}|${intento}`
   caso = generarCaso(semilla, modo, mapaDeLaCuota, sesgoDelArquetipo)
   si caso cumple cuota y firma no repetida: aceptar
-escribir public/cases/{novato,inspector,comisario,diario,expedientes}.json
+escribir public/cases/{novato,inspector,comisario,diario}.json
 escribir public/cases/manifest.json  { version, counts, hash por archivo }
 ```
 
 - Determinista: con la misma `bankVersion` se obtiene el mismo banco.
 - Tiempo esperado: pocos minutos en un portátil (Comisario es lo más costoso, aproximadamente 1 s por intento más rechazos).
-- Los expedientes se generan como series: mismo mapa y mismo reparto de 5 (el caso 1 usa los 4 primeros), tres víctimas distintas ("Primera noche", "Segunda noche", "Tercera noche") y dificultades Novato, Inspector y Comisario.
 
 ### 12.3 Validación e informe
 
@@ -565,7 +564,6 @@ escribir public/cases/manifest.json  { version, counts, hash por archivo }
 |---|---|---|
 | **Caso suelto** | Banco del nivel elegido | El siguiente se sirve al instante |
 | **Caso del día** | `diario.json`, índice = días desde 2026-01-01 módulo el número de casos | Igual para todo el mundo ese día. Cuenta para la racha diaria. Resultado compartible |
-| **Expediente** | `expedientes.json` | Tres noches seguidas en el mismo lugar y con el mismo reparto. Tres errores en total para toda la serie; estrellas acumuladas (máximo 9). Si se agotan los errores, el expediente queda archivado |
 | **Modo infinito** | Generador en un Web Worker | Mismo generador y mismos filtros, con presupuesto de 8 s por caso. El siguiente se pregenera mientras juegas |
 
 ---
@@ -595,7 +593,7 @@ Hoja a pantalla casi completa, en este orden:
 2. **Frase de cierre:** "{Culpable}, {rol}, estuvo a solas con {víctima} en {sala} a las {hora}. Llevaba {arma}. Motivo: {motivo}."
 3. **La clave:** texto de la deducción clave (Apéndice C) con su arquetipo ("La coartada imposible").
 4. **Cadena de deducción** (desplegable, cerrada por defecto): lista numerada de los pasos críticos con su explicación y los números de pista.
-5. **Botón principal: "Siguiente caso"** (mismo nivel; en expediente, "Siguiente noche").
+5. **Botón principal: "Siguiente caso"** (mismo nivel).
 6. Acciones secundarias: "Ver la noche en el plano" (reconstrucción), "Copiar resultado", "Copiar enlace a este caso", "Volver a la portada".
 
 **Reconstrucción:** el plano muestra las fichas reales moviéndose hora a hora (transición de 600 ms entre salas, 1,4 s por hora), con la sala del crimen resaltada a la hora `td`. Con `prefers-reduced-motion`, pasos sin transición.
@@ -649,7 +647,6 @@ En el perfil, una colección de los 7 arquetipos: cuántos casos has resuelto de
 
 - Racha diaria (casos del día consecutivos) y mejor racha.
 - Por nivel: resueltos, perfectos (3 estrellas), tasa de acierto a la primera, tiempo mediano.
-- Expedientes completados.
 
 Todo en local; no se envían datos.
 
@@ -669,7 +666,7 @@ Todo en local; no se envían datos.
 
 ### 17.2 Pantallas
 
-1. **Portada:** cabecera (marca, "Cómo se juega", ◐, perfil); héroe con título y plano animado; botones "Seguir el caso" (si hay uno en curso), "Caso nuevo", "Caso del día" y "Expediente"; barra de rango; "Tres reglas, nada más"; niveles con botón de empezar; escenarios (bloqueados con silueta); pie.
+1. **Portada:** cabecera (marca, "Cómo se juega", ◐, perfil); héroe con título y plano animado; botones "Seguir el caso" (si hay uno en curso), "Caso nuevo" y "Caso del día"; barra de rango; "Tres reglas, nada más"; niveles con botón de empezar; escenarios (bloqueados con silueta); pie.
 2. **Selector de caso nuevo:** hoja inferior con los tres niveles y el escenario ("Cualquiera" por defecto).
 3. **Mesa de trabajo** (el juego).
 4. **Hoja de acusación.**
@@ -776,12 +773,11 @@ Informe completo (introducción del escenario, víctima, sala y hora), reparto c
 | Clave | Contenido |
 |---|---|
 | `hm2:settings` | `{ theme, showTimer, trail, moveHelp, autoGrid }` |
-| `hm2:profile` | `{ stars, rank, solved: {n,i,c}, perfect: {n,i,c}, firstTry: {n,i,c}, times: {n:[],i:[],c:[]}, arch: {coartada: n, …}, series: n }` |
+| `hm2:profile` | `{ stars, rank, solved: {n,i,c}, perfect: {n,i,c}, firstTry: {n,i,c}, times: {n:[],i:[],c:[]}, arch: {coartada: n, …} }` |
 | `hm2:order` | `{ seed }` (semilla personal de orden) |
 | `hm2:played` | `{ [bankVersion]: string[] }` |
 | `hm2:game` | Caso en curso: `{ caseId | gen, mode, marks, grid, discarded, struck, strokes, stars, errors, hints, hintLog, elapsed, startedAt }` |
 | `hm2:daily` | `{ [YYYY-MM-DD]: { stars, errors, hints, time } }` |
-| `hm2:series` | `{ id, index, errorsLeft, stars, done }` |
 
 - Guardado automático con 300 ms de retardo tras cada acción y al ocultar la pestaña (`visibilitychange`).
 - **Migración desde v1:** si existe `hm:stats`, se importan `solved` y el mapa `daily` a `hm2:profile` y `hm2:daily`. El caso en curso de v1 no se migra.
@@ -821,7 +817,7 @@ src/
     store.ts               # estado + acciones + suscripción + deshacer
     storage.ts             # hm2:* con try/catch y migración
     bank.ts                # manifest, carga bajo demanda, orden personal, jugados
-    modes.ts               # suelto, diario, expediente, infinito
+    modes.ts               # suelto, diario, infinito
     hints.ts               # pista del inspector
     scoring.ts             # estrellas, errores, cierre
     progression.ts         # rango, desbloqueos, archivo
@@ -833,7 +829,7 @@ src/
   workers/generator.worker.ts
   main.ts
 scripts/ build-bank.ts validate-bank.ts bank-report.ts bank.config.ts
-public/cases/ manifest.json novato.json inspector.json comisario.json diario.json expedientes.json
+public/cases/ manifest.json novato.json inspector.json comisario.json diario.json
 public/ manifest.webmanifest icons/
 tests/ engine/*.test.ts bank/*.test.ts e2e/*.spec.ts
 docs/ DISENO_TECNICO.md referencia/hora-muerta-v1.html
@@ -871,7 +867,7 @@ Un único `store` con estado serializable (`GameState`) y acciones puras (`mark`
 - Capturas de referencia en tema claro y oscuro.
 - Sin desbordamiento horizontal del `body` en ningún tamaño.
 
-**Criterios de aceptación de v2:** banco de 600 casos validado; los tres niveles cumplen sus bandas; la estela y la pista del inspector funcionan; el juego completo es cómodo en 360 px de ancho; jugable sin conexión tras la primera carga.
+**Criterios de aceptación de v2:** banco de 540 casos validado; los tres niveles cumplen sus bandas; la estela y la pista del inspector funcionan; el juego completo es cómodo en 360 px de ancho; jugable sin conexión tras la primera carga.
 
 ---
 
@@ -882,11 +878,11 @@ Un único `store` con estado serializable (`GameState`) y acciones puras (`mark`
 | M0 | Proyecto, herramientas, CI, portar identidad visual | La portada de v1 funcionando en el nuevo proyecto |
 | M1 | Motor portado a TS, 6 mapas, pistas nuevas, solver exacto y pruebas | Casos generados por consola |
 | M2 | Solver humano, cadena crítica, puntuación, arquetipos y pruebas | Informe de dificultad por caso |
-| M3 | Generador v2, scripts del banco, 600 casos validados | Archivos JSON del banco e informe |
+| M3 | Generador v2, scripts del banco, 540 casos validados | Archivos JSON del banco e informe |
 | M4 | Mesa de trabajo responsive: plano, marcas, estela, tiza, horas, hoja inferior | Jugar un caso del banco en móvil |
 | M5 | Pistas interactivas, tabla, pestaña Caso, acusación, estrellas, cierre y reconstrucción | Bucle completo de un caso |
 | M6 | Pista del inspector y revisión de marcas | Ayudas en dos fases |
-| M7 | Servir sin repetir, caso del día, expediente, modo infinito en worker, enlaces | Todos los modos |
+| M7 | Servir sin repetir, caso del día, modo infinito en worker, enlaces | Todos los modos |
 | M8 | Rango, desbloqueos, archivo, estadísticas, ajustes, migración | Progresión |
 | M9 | PWA, rendimiento, accesibilidad, e2e y pulido | Versión 2 lista |
 
@@ -895,7 +891,6 @@ Un único `store` con estado serializable (`GameState`) y acciones puras (`mark`
 ## 22. Futuro (fuera de v2)
 
 - **El testigo que miente:** un sospechoso da testimonios en primera persona; los inocentes dicen la verdad y el culpable miente. Es la única mecánica que añade una capa de pensamiento nueva. Requiere un nivel 4 bis en el solver humano ("si X miente, entonces…").
-- **Eco entre casos del expediente:** un detalle de la primera noche es pista de la tercera.
 - **Editor de casos** para diseñar a mano y validar con los dos solvers.
 
 ---

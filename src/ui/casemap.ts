@@ -18,6 +18,8 @@ import { isMapUnlocked } from '../game/progression';
 export interface CaseMapOptions {
   onPlay: (caseData: CaseDef, bankVersion: string | null) => void;
   onShowFullList: () => void;
+  /** Llegar con el plano ya desplegado y a la vista (p. ej. "Ir a jugar un caso" desde la Academia). */
+  startOpen?: boolean;
 }
 
 function requireEl<T extends Element>(root: ParentNode, selector: string): T {
@@ -301,6 +303,9 @@ export function renderCaseMap(root: HTMLElement, options: CaseMapOptions): () =>
   // la portada) y arranque del motor de pines en cuanto haya algo que enseñar.
   const bankVersions: Partial<Record<DiffIndex, string>> = {};
   let tickTimer: ReturnType<typeof setInterval> | null = null;
+  // La carga es asíncrona: si la portada se desmonta antes de que termine, no debe
+  // arrancar el intervalo de los pines después de haberse ido.
+  let disposed = false;
   void (async () => {
     const stars = getProfile().stars;
     const unlocked = new Set(MAPS.filter((m) => isMapUnlocked(m.unlock, stars)).map((m) => m.id));
@@ -313,13 +318,14 @@ export function renderCaseMap(root: HTMLElement, options: CaseMapOptions): () =>
     for (const { mode, diff } of modes) {
       try {
         const bank = await loadBank(mode);
+        if (disposed) return;
         bankVersions[diff] = bank.version;
         for (const c of bank.cases) if (unlocked.has(c.map)) pool.push(c);
       } catch {
         // sin conexión o banco no disponible: el plano se queda con lo que haya podido cargar
       }
     }
-    if (pool.length === 0) return;
+    if (disposed || pool.length === 0) return;
     engine = new PinEngine(pool);
     tickTimer = setInterval(() => {
       if (engine?.tick()) renderAll();
@@ -329,9 +335,17 @@ export function renderCaseMap(root: HTMLElement, options: CaseMapOptions): () =>
 
   layout();
   renderAll();
+  if (options.startOpen) {
+    // Sin la animación del plegado: se llega con el plano ya abierto.
+    state = 'opening';
+    finishOpen();
+    root.scrollIntoView({ block: 'start' });
+  }
 
   return () => {
+    disposed = true;
     window.removeEventListener('resize', onResize);
     if (tickTimer) clearInterval(tickTimer);
+    tickTimer = null;
   };
 }

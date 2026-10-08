@@ -11,8 +11,11 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "bank:build": "tsx scripts/build-bank.ts",
+    "bank:group": "tsx scripts/build-group.ts",
     "bank:validate": "tsx scripts/validate-bank.ts",
-    "bank:report": "tsx scripts/bank-report.ts"
+    "bank:report": "tsx scripts/bank-report.ts",
+    "drills:build": "tsx scripts/build-drills.ts",
+    "drills:validate": "tsx scripts/validate-drills.ts"
   },
   "dependencies": {
     "astro": "^5.17.1"

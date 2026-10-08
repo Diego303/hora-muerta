@@ -8,30 +8,58 @@ import { buildGraph } from '../engine/graph';
 import { formatElapsed, hintPush, stepExplanation, stepFocus, timeLabel } from '../engine/text';
 import type { CaseDef, MapDef, Room } from '../engine/types';
 import { markPlayed } from '../game/bank';
-import { completeNight, loadSeriesProgress, registerSeriesError } from '../game/expediente';
 import { nextHint } from '../game/hints';
 import { recordDailyResult, todayKey } from '../game/modes';
 import { ARCHETYPE_LABELS, recordClosure } from '../game/progression';
 import { TUTORIAL_CASE_ID } from '../game/tutorial';
-import type { AccusationOutcome } from '../game/scoring';
 import { computeStars } from '../game/scoring';
 import { clearSavedGame, loadSavedGame, saveGame } from '../game/session';
-import type { ChalkColor, GameStore, MarkValue } from '../game/store';
+import type { BoardLocks, ChalkColor, GameStore, MarkValue } from '../game/store';
 import { createGameStore, markKey } from '../game/store';
 import { effectiveMoveHelp, getProfile, getSettings, saveProfile } from '../game/storage';
+import { suggestTech } from '../modes/gym/bridge';
+import type { Tech } from '../modes/gym/types';
 import { openAccuseSheet } from './accuse';
 import { setupChalk } from './chalk';
 import { renderCaseTab } from './casetab';
 import { clueFocusTarget, renderClueList } from './clues';
+import type { ClueDecor } from './clues';
 import { renderClosure } from './closure';
 import { renderObjectsTable } from './objects';
 import { buildPlan } from './plan';
 import type { PlanHandle, SuspectView } from './plan';
 import { toast } from './toast';
 
+/** Lo que el Modo Incendio necesita del tablero (docs/MODOS.md 2.2). El tablero
+ * no sabe de tiempos ni de fuego: solo pregunta y avisa. */
+export interface FireHooks {
+  roomBurning(room: Room): boolean;
+  /** El edificio se ha derrumbado: no se acusa ni se marca. */
+  frozen(): boolean;
+  notice(message: string): void;
+  /** Se acaba de hacer una acusación errónea (y el edificio sigue en pie). */
+  onWrongAccusation(): void;
+  /** Pone la capa de fuego sobre un plano (el normal y el ampliado). Devuelve cómo quitarla. */
+  decoratePlan(svg: SVGSVGElement, plan: PlanHandle): () => void;
+  /** Cómo se pinta cada pista: mecha, foto, quemada. */
+  clueDecor: ClueDecor;
+  /** El caso se ha resuelto: el tablero ya se ha parado y el modo pinta su propio cierre. */
+  onSolved(): void;
+  /** Salir a mitad: el modo decide si pregunta antes. */
+  confirmExit(proceed: () => void): void;
+}
+
+/** Lo que el tablero ofrece a quien lo engancha desde fuera (onReady). */
+export interface BoardHandle {
+  /** Vuelve a pintar Pistas, Objetos y Caso sin que cambie el store (p. ej. una pista que arde). */
+  refreshSheet(): void;
+}
+
 export interface BoardOptions {
   onExit: () => void;
   onNextCase: (finishedCase: CaseDef) => void;
+  /** Presente solo en el Modo Incendio: cambia lo que se guarda, la acusación y las pistas. */
+  fire?: FireHooks;
   /** Versión del banco de la que viene `caseData` (§12.5, §12.6), para marcarlo
    * como jugado al cerrar el caso; `null` si no viene de un banco versionado
    * (p. ej. modo infinito). */
@@ -39,7 +67,12 @@ export interface BoardOptions {
   /** Se llama una vez, justo después de montar el tablero, con el store y el
    * plano ya construidos (ui/tutorial.ts lo usa para enganchar el "coach" sin
    * que board.ts sepa nada del tutorial). */
-  onReady?: (store: GameStore, plan: PlanHandle) => void;
+  onReady?: (store: GameStore, plan: PlanHandle, board: BoardHandle) => void;
+  /** "Practicar remates" desde la hoja de acusación (MODOS 3.10.1). Solo donde el
+   * caso se puede retomar: el tablero lo guarda antes de salir. */
+  onPracticeRemates?: () => void;
+  /** Ir a la Academia a practicar la técnica sugerida tras un caso con fallos (MODOS 3.10.2). */
+  onTrain?: (tech: Tech) => void;
 }
 
 function findMap(mapId: CaseDef['map']): MapDef {
@@ -93,19 +126,37 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   const graph = buildGraph(map);
   const textCtx = buildTextContext(map, caseData.cast, caseData.objects);
   const suspects: SuspectView[] = textCtx.suspects.map((s) => ({ name: s.name, init: s.name[0], color: s.color }));
-  // Un expediente comparte el presupuesto de errores entre sus 3 noches
-  // (§13): esta noche por sí sola nunca se archiva; el handler de la
-  // acusación (más abajo) lleva la cuenta compartida aparte. El tutorial
-  // tampoco tiene presupuesto de errores: "equivócate sin miedo".
-  const maxErrors = caseData.mode === 'expediente' || caseData.id === TUTORIAL_CASE_ID ? Number.POSITIVE_INFINITY : 2;
-  const store = createGameStore(caseData, map.rooms.length, nextHint, maxErrors);
+  // El tutorial no tiene presupuesto de errores: "equivócate sin miedo".
+  // En el Modo Incendio el presupuesto de errores no existe: cada acusación errónea
+  // resta tiempo (FireHooks.onWrongAccusation). Las salas en llamas y el derrumbe
+  // se consultan en cada acción; roomAtPoint usa el plano, que se construye más abajo.
+  const fire = options.fire;
+  const maxErrors =
+    fire || caseData.id === TUTORIAL_CASE_ID ? Number.POSITIVE_INFINITY : 2;
+  const locks: BoardLocks | undefined = fire
+    ? {
+        roomBurning: (room) => fire.roomBurning(room),
+        roomAt: (point) => roomAtPoint(point),
+        frozen: () => fire.frozen(),
+        notice: (message) => fire.notice(message),
+      }
+    : undefined;
+  const store = createGameStore(caseData, map.rooms.length, nextHint, maxErrors, locks);
 
   // Caso en curso (§18, hm2:game): retoma el progreso guardado si es el mismo
   // caso; si no, empieza de cero. Abrir la web no lo descarta; solo cerrar el
-  // caso (showClosure) lo borra.
-  const resumed = loadSavedGame();
+  // caso (showClosure) lo borra. El Modo Incendio no se guarda: recargar es abandonar.
+  const resumed = fire ? null : loadSavedGame();
   const startedAt = resumed && resumed.caseId === caseData.id ? resumed.startedAt : Date.now();
   if (resumed && resumed.caseId === caseData.id) store.hydrate(resumed);
+
+  function roomAtPoint(point: [number, number]): Room | null {
+    for (let room = 0; room < map.rooms.length; room++) {
+      const rect = plan.roomRect(room);
+      if (point[0] >= rect.x && point[0] <= rect.x + rect.w && point[1] >= rect.y && point[1] <= rect.y + rect.h) return room;
+    }
+    return null;
+  }
 
   root.innerHTML = `
     <div class="game" id="gameRoot" data-case-id="${caseData.id}">
@@ -192,6 +243,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
 
   const plan: PlanHandle = buildPlan(mapSvg, map, { interactive: true, crimeRoom: caseData.rv, victimLabel: victimName });
   const chalk = setupChalk(chalkCanvas, plan.width, plan.height, store);
+  const undecoratePlan = fire?.decoratePlan(mapSvg, plan) ?? null;
 
   plan.hits.forEach((hit) => {
     const room = Number(hit.dataset.r);
@@ -240,6 +292,13 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   root.querySelector('#undo')?.addEventListener('click', () => store.undo());
   root.querySelector('#expand')?.addEventListener('click', () => openExpandedPlan());
   root.querySelector('#exit')?.addEventListener('click', () => {
+    if (fire) {
+      fire.confirmExit(() => {
+        cleanup();
+        options.onExit();
+      });
+      return;
+    }
     cleanup();
     options.onExit();
   });
@@ -255,19 +314,23 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
       store.setHour(hint.hour);
     }
   });
+  // La pista del inspector no existe en el Modo Incendio: es un modo de presión (MODOS 2.2).
+  if (fire) root.querySelector<HTMLButtonElement>('#hintBtn')?.setAttribute('hidden', '');
   hintExplainBtn.addEventListener('click', () => store.explainHint());
   root.querySelector('#accuseBtn')?.addEventListener('click', () => {
-    if (caseData.mode === 'expediente') {
-      const errorsLeft = loadSeriesProgress()?.errorsLeft ?? 3;
-      openAccuseSheet(textCtx, store, {
-        errorsLabel: `Quedan ${errorsLeft} acusación${errorsLeft === 1 ? '' : 'es'} para todo el expediente.`,
-        onOutcome: (outcome) => handleExpedienteOutcome(outcome),
-      });
+    if (fire?.frozen()) {
+      toast('El edificio ya se ha derrumbado.');
       return;
     }
     openAccuseSheet(textCtx, store, {
-      errorsLabel: `Errores: ${store.getState().errors}/2`,
+      errorsLabel: fire ? 'Cada acusación errónea resta 30 segundos.' : `Errores: ${store.getState().errors}/2`,
+      onPracticeRemates: fire ? undefined : practiceRemates,
       onOutcome: (outcome) => {
+        if (fire) {
+          if (outcome.correct) showClosure();
+          else fire.onWrongAccusation();
+          return;
+        }
         if (outcome.correct || outcome.result === 'archived') {
           showClosure();
           return;
@@ -359,7 +422,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
       button.setAttribute('aria-pressed', String(button.dataset.tab === state.sheetTab));
     });
     sheetBody.dataset.activeTab = state.sheetTab;
-    renderClueList(pistasBody, caseData.clues, textCtx, store);
+    renderClueList(pistasBody, caseData.clues, textCtx, store, fire?.clueDecor);
     renderObjectsTable(objetosBody, textCtx, store);
     renderCaseTab(casoBody, map, caseData, textCtx, store);
   }
@@ -468,7 +531,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   const unsubscribe = store.subscribe(renderAll);
   renderLegend();
   renderAll();
-  options.onReady?.(store, plan);
+  options.onReady?.(store, plan, { refreshSheet: renderSheet });
 
   // Guardado automático con 300 ms de retardo tras cada acción, y al momento
   // si se oculta la pestaña (§18), para no perder el progreso al recargar.
@@ -480,7 +543,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     }
     // El tutorial no se guarda como "caso en curso": no está en ningún banco,
     // así que "Seguir el caso" no podría volver a abrirlo (§18).
-    if (caseData.id === TUTORIAL_CASE_ID) return;
+    if (caseData.id === TUTORIAL_CASE_ID || fire) return;
     saveGame(caseData.id, caseData.mode, store.getState(), startedAt);
   }
   const unsaveSubscribe = store.subscribe(() => {
@@ -525,6 +588,12 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   const tickTimer = setInterval(() => store.tick(), 1000);
 
   let expandCleanup: (() => void) | null = null;
+  let closureCleanup: (() => void) | null = null;
+  function stopClosure(): void {
+    const stop = closureCleanup;
+    closureCleanup = null;
+    stop?.();
+  }
   function openExpandedPlan(): void {
     const overlay = document.createElement('div');
     overlay.className = 'plan-overlay';
@@ -540,6 +609,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     if (!svgEl || !canvasEl || !timesExpanded) return;
     const expandedPlan = buildPlan(svgEl, map, { interactive: true, crimeRoom: caseData.rv, victimLabel: victimName });
     const expandedChalk = setupChalk(canvasEl, expandedPlan.width, expandedPlan.height, store);
+    const undecorateExpanded = fire?.decoratePlan(svgEl, expandedPlan) ?? null;
     expandedPlan.hits.forEach((hit) => {
       const room = Number(hit.dataset.r);
       hit.addEventListener('click', () => roomTap(room));
@@ -563,6 +633,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     redrawExpanded();
     const close = (): void => {
       unsub();
+      undecorateExpanded?.();
       expandedChalk.destroy();
       overlay.remove();
       expandCleanup = null;
@@ -586,44 +657,34 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     document.removeEventListener('keydown', onGlobalKeydown);
     clearInterval(tickTimer);
     chalk.destroy();
+    undecoratePlan?.();
     expandCleanup?.();
+    stopClosure();
   }
 
-  // Expediente (§13): el presupuesto de errores es de las 3 noches juntas, no
-  // de esta sola; una acusación errónea gasta el presupuesto COMPARTIDO
-  // (game/expediente.ts), y solo se archiva la noche (con store.forceArchive(),
-  // ya que esta noche por sí sola nunca lo hace: ver el maxErrors de arriba)
-  // cuando se agota para toda la serie.
-  function handleExpedienteOutcome(outcome: AccusationOutcome): void {
-    if (outcome.correct) {
-      showClosure();
-      return;
-    }
-    const progress = loadSeriesProgress();
-    if (!progress) {
-      toast('No encaja con los hechos.');
-      return;
-    }
-    const updated = registerSeriesError(progress);
-    if (updated.done) {
-      store.forceArchive();
-      showClosure();
-      return;
-    }
-    toast(`No encaja con los hechos. Quedan ${updated.errorsLeft} acusación${updated.errorsLeft === 1 ? '' : 'es'} para todo el expediente.`);
-  }
-
-  const EXPEDIENTE_NIGHTS = 3;
+  /** Undefined donde no hay a dónde volver: el caso se guarda y se retoma con "Volver a tu caso". */
+  const practiceRemates = options.onPracticeRemates
+    ? (): void => {
+        flushSave();
+        cleanup();
+        options.onPracticeRemates?.();
+      }
+    : undefined;
 
   function showClosure(): void {
     const finalState = store.getState();
     cleanup();
+    // El Modo Incendio tiene su propio cierre (medallas, récords) y nunca se guarda,
+    // así que tampoco puede borrar el caso normal en curso ni contar como caso jugado.
+    if (fire) {
+      fire.onSolved();
+      return;
+    }
     clearSavedGame();
     if (options.bankVersion) markPlayed(options.bankVersion, caseData.id);
     // Progresión (§16): cada caso RESUELTO (no un archivado sin resolver)
     // cuenta para el rango, los recuentos por nivel y el archivo de
-    // arquetipos, sea cual sea el modo (suelto, diario o una noche de
-    // expediente). El tutorial es la única excepción: no cuenta en las
+    // arquetipos, sea cual sea el modo (suelto o diario). El tutorial es la única excepción: no cuenta en las
     // estadísticas (game/tutorial.ts).
     if (finalState.result === 'solved' && caseData.id !== TUTORIAL_CASE_ID) {
       const { profile, newArchetypes } = recordClosure(getProfile(), {
@@ -647,18 +708,24 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
         time: finalState.elapsed,
       });
     }
-    if (caseData.mode === 'expediente' && finalState.result === 'solved') {
-      const progress = loadSeriesProgress();
-      if (progress) completeNight(progress, computeStars(finalState.errors, finalState.hintsUsed), EXPEDIENTE_NIGHTS);
-    }
-    let closureCleanup: (() => void) | null = null;
+    // Tras fallar alguna acusación, la técnica que conviene practicar (MODOS 3.10.2).
+    const suggestion = finalState.errors > 0 && options.onTrain ? suggestTech(caseData.solve.arch) : null;
     closureCleanup = renderClosure(root, map, caseData, textCtx, suspects, store, {
+      suggestion: suggestion
+        ? {
+            ...suggestion,
+            onGo: () => {
+              stopClosure();
+              options.onTrain?.(suggestion.tech);
+            },
+          }
+        : null,
       onNext: () => {
-        closureCleanup?.();
+        stopClosure();
         options.onNextCase(caseData);
       },
       onBackToLanding: () => {
-        closureCleanup?.();
+        stopClosure();
         options.onExit();
       },
     });

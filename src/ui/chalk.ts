@@ -79,6 +79,7 @@ export function setupChalk(canvas: HTMLCanvasElement, planWidth: number, planHei
       redraw();
       return;
     }
+    if (!store.requestStroke([Math.round(point[0]), Math.round(point[1])])) return;
     drawing = {
       color: state.chalkColor,
       hour: state.allLayer ? 'all' : state.hour,

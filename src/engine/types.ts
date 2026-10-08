@@ -40,6 +40,20 @@ export interface MapDef {
   unlock: Unlock;
 }
 
+/** Lo mínimo de un plano para construir su grafo y dibujarlo: lo cumplen los seis
+ * escenarios (MapDef) y los planos que solo existen para ejercicios, como la "Casa de
+ * prácticas" del calentamiento (docs/MODOS.md, decisión D2). */
+export interface FloorPlan {
+  id: string;
+  name: string;
+  unit: 'sala' | 'vagón';
+  w: number;
+  h: number;
+  features: [FeatureDef, FeatureDef];
+  rooms: RoomDef[];
+  edges: [RoomId, RoomId][];
+}
+
 /** Grafo precalculado a partir de un MapDef (§19.2, graph.ts). */
 export interface Graph {
   adj: number[][];
@@ -98,7 +112,9 @@ export interface Step {
   crit: boolean; // pertenece a la cadena crítica
 }
 
-export type CaseMode = 'novato' | 'inspector' | 'comisario' | 'diario' | 'expediente';
+export type CaseMode = 'novato' | 'inspector' | 'comisario' | 'diario';
+/** Los tres niveles de caso suelto (el caso del día es aparte, §13). */
+export type LevelMode = Exclude<CaseMode, 'diario'>;
 
 export interface CaseDef {
   v: 2;
@@ -134,9 +150,3 @@ export interface BankFile {
   cases: CaseDef[];
 }
 
-export interface SeriesDef {
-  id: string;
-  map: MapId;
-  cast: number[];
-  cases: CaseDef[];
-}
