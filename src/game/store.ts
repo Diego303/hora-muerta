@@ -143,9 +143,6 @@ export interface GameStore {
     hintsUsed: number;
     elapsed: number;
   }): void;
-  /** Fuerza el cierre como archivado, sin pasar por accuse() (expediente,
-   * §13: el presupuesto de errores es de la serie, no de esta noche). */
-  forceArchive(): void;
 }
 
 export function createGameStore(
@@ -438,10 +435,6 @@ export function createGameStore(
       state.errors = saved.errors;
       state.hintsUsed = saved.hintsUsed;
       state.elapsed = saved.elapsed;
-      notify();
-    },
-    forceArchive() {
-      state.result = 'archived';
       notify();
     },
   };

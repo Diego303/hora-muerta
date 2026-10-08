@@ -18,6 +18,8 @@
 
 ---
 
+> **Nota posterior:** el modo Expediente se eliminó después de este plan (ver DECISIONES.md, "Expediente eliminado"); sus menciones aquí son el contexto de entonces.
+
 ## 2. Estado verificado del repositorio
 
 | Área | Estado real | Implicación para el plan |

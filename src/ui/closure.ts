@@ -37,7 +37,6 @@ export function renderClosure(
   const state = store.getState();
   const stars = computeStars(state.errors, state.hintsUsed);
   const solved = state.result === 'solved';
-  const nextLabel = caseData.mode === 'expediente' ? 'Siguiente noche' : 'Siguiente caso';
 
   const chain = caseData.solve.steps.map((step, i) => `<li>${stepExplanation(step, i, caseData.solve.steps, caseData, ctx)}</li>`).join('');
 
@@ -68,7 +67,7 @@ export function renderClosure(
       </aside>`
           : ''
       }
-      <button class="btn" id="nextCase">${nextLabel}</button>
+      <button class="btn" id="nextCase">Siguiente caso</button>
       <div class="closure-actions">
         <button class="btn ghost" id="reconBtn">Ver la noche en el plano</button>
         <button class="btn ghost" id="shareBtn">Copiar resultado</button>

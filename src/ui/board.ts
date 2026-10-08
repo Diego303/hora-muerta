@@ -8,12 +8,10 @@ import { buildGraph } from '../engine/graph';
 import { formatElapsed, hintPush, stepExplanation, stepFocus, timeLabel } from '../engine/text';
 import type { CaseDef, MapDef, Room } from '../engine/types';
 import { markPlayed } from '../game/bank';
-import { completeNight, loadSeriesProgress, registerSeriesError } from '../game/expediente';
 import { nextHint } from '../game/hints';
 import { recordDailyResult, todayKey } from '../game/modes';
 import { ARCHETYPE_LABELS, recordClosure } from '../game/progression';
 import { TUTORIAL_CASE_ID } from '../game/tutorial';
-import type { AccusationOutcome } from '../game/scoring';
 import { computeStars } from '../game/scoring';
 import { clearSavedGame, loadSavedGame, saveGame } from '../game/session';
 import type { BoardLocks, ChalkColor, GameStore, MarkValue } from '../game/store';
@@ -128,16 +126,13 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   const graph = buildGraph(map);
   const textCtx = buildTextContext(map, caseData.cast, caseData.objects);
   const suspects: SuspectView[] = textCtx.suspects.map((s) => ({ name: s.name, init: s.name[0], color: s.color }));
-  // Un expediente comparte el presupuesto de errores entre sus 3 noches
-  // (§13): esta noche por sí sola nunca se archiva; el handler de la
-  // acusación (más abajo) lleva la cuenta compartida aparte. El tutorial
-  // tampoco tiene presupuesto de errores: "equivócate sin miedo".
+  // El tutorial no tiene presupuesto de errores: "equivócate sin miedo".
   // En el Modo Incendio el presupuesto de errores no existe: cada acusación errónea
   // resta tiempo (FireHooks.onWrongAccusation). Las salas en llamas y el derrumbe
   // se consultan en cada acción; roomAtPoint usa el plano, que se construye más abajo.
   const fire = options.fire;
   const maxErrors =
-    fire || caseData.mode === 'expediente' || caseData.id === TUTORIAL_CASE_ID ? Number.POSITIVE_INFINITY : 2;
+    fire || caseData.id === TUTORIAL_CASE_ID ? Number.POSITIVE_INFINITY : 2;
   const locks: BoardLocks | undefined = fire
     ? {
         roomBurning: (room) => fire.roomBurning(room),
@@ -325,15 +320,6 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
   root.querySelector('#accuseBtn')?.addEventListener('click', () => {
     if (fire?.frozen()) {
       toast('El edificio ya se ha derrumbado.');
-      return;
-    }
-    if (caseData.mode === 'expediente') {
-      const errorsLeft = loadSeriesProgress()?.errorsLeft ?? 3;
-      openAccuseSheet(textCtx, store, {
-        errorsLabel: `Quedan ${errorsLeft} acusación${errorsLeft === 1 ? '' : 'es'} para todo el expediente.`,
-        onOutcome: (outcome) => handleExpedienteOutcome(outcome),
-        onPracticeRemates: practiceRemates,
-      });
       return;
     }
     openAccuseSheet(textCtx, store, {
@@ -676,32 +662,6 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     stopClosure();
   }
 
-  // Expediente (§13): el presupuesto de errores es de las 3 noches juntas, no
-  // de esta sola; una acusación errónea gasta el presupuesto COMPARTIDO
-  // (game/expediente.ts), y solo se archiva la noche (con store.forceArchive(),
-  // ya que esta noche por sí sola nunca lo hace: ver el maxErrors de arriba)
-  // cuando se agota para toda la serie.
-  function handleExpedienteOutcome(outcome: AccusationOutcome): void {
-    if (outcome.correct) {
-      showClosure();
-      return;
-    }
-    const progress = loadSeriesProgress();
-    if (!progress) {
-      toast('No encaja con los hechos.');
-      return;
-    }
-    const updated = registerSeriesError(progress);
-    if (updated.done) {
-      store.forceArchive();
-      showClosure();
-      return;
-    }
-    toast(`No encaja con los hechos. Quedan ${updated.errorsLeft} acusación${updated.errorsLeft === 1 ? '' : 'es'} para todo el expediente.`);
-  }
-
-  const EXPEDIENTE_NIGHTS = 3;
-
   /** Undefined donde no hay a dónde volver: el caso se guarda y se retoma con "Volver a tu caso". */
   const practiceRemates = options.onPracticeRemates
     ? (): void => {
@@ -724,8 +684,7 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
     if (options.bankVersion) markPlayed(options.bankVersion, caseData.id);
     // Progresión (§16): cada caso RESUELTO (no un archivado sin resolver)
     // cuenta para el rango, los recuentos por nivel y el archivo de
-    // arquetipos, sea cual sea el modo (suelto, diario o una noche de
-    // expediente). El tutorial es la única excepción: no cuenta en las
+    // arquetipos, sea cual sea el modo (suelto o diario). El tutorial es la única excepción: no cuenta en las
     // estadísticas (game/tutorial.ts).
     if (finalState.result === 'solved' && caseData.id !== TUTORIAL_CASE_ID) {
       const { profile, newArchetypes } = recordClosure(getProfile(), {
@@ -748,10 +707,6 @@ export function renderBoard(root: HTMLElement, caseData: CaseDef, options: Board
         hints: finalState.hintsUsed,
         time: finalState.elapsed,
       });
-    }
-    if (caseData.mode === 'expediente' && finalState.result === 'solved') {
-      const progress = loadSeriesProgress();
-      if (progress) completeNight(progress, computeStars(finalState.errors, finalState.hintsUsed), EXPEDIENTE_NIGHTS);
     }
     // Tras fallar alguna acusación, la técnica que conviene practicar (MODOS 3.10.2).
     const suggestion = finalState.errors > 0 && options.onTrain ? suggestTech(caseData.solve.arch) : null;

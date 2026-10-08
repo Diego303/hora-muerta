@@ -112,7 +112,9 @@ export interface Step {
   crit: boolean; // pertenece a la cadena crítica
 }
 
-export type CaseMode = 'novato' | 'inspector' | 'comisario' | 'diario' | 'expediente';
+export type CaseMode = 'novato' | 'inspector' | 'comisario' | 'diario';
+/** Los tres niveles de caso suelto (el caso del día es aparte, §13). */
+export type LevelMode = Exclude<CaseMode, 'diario'>;
 
 export interface CaseDef {
   v: 2;
@@ -148,9 +150,3 @@ export interface BankFile {
   cases: CaseDef[];
 }
 
-export interface SeriesDef {
-  id: string;
-  map: MapId;
-  cast: number[];
-  cases: CaseDef[];
-}

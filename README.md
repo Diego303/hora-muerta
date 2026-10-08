@@ -40,7 +40,7 @@ Antes de dar algo por terminado conviene pasar `pnpm typecheck && pnpm lint && p
 El juego lee los casos ya generados desde `public/cases/*.json` (no genera nada en el navegador salvo en el modo infinito). Para regenerarlos:
 
 ```bash
-pnpm bank:build      # genera novato/inspector/comisario/diario/expedientes según scripts/bank.config.ts
+pnpm bank:build      # genera novato/inspector/comisario/diario según scripts/bank.config.ts
 pnpm bank:validate    # comprueba unicidad y coherencia de lo generado
 pnpm bank:report      # resumen legible del contenido del banco
 ```

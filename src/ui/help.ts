@@ -13,7 +13,6 @@ const GLOSSARY: [string, string][] = [
   ['Ayuda de movimiento', 'Con alguien seleccionado, raya las salas a las que no pudo llegar según sus propias marcas (no según la solución).'],
   ['Pista del inspector', 'Un empujón hacia el siguiente paso que puedes deducir ya, sin dar la respuesta. Cuesta una estrella la primera vez que la pides.'],
   ['Caso del día', 'El mismo caso para todo el mundo, cada día; no cuenta para "sin repetir" de los casos sueltos.'],
-  ['Expediente', 'Tres noches seguidas con el mismo reparto y un presupuesto de errores compartido entre las tres.'],
   ['Modo infinito', 'Casos generados al momento en tu propio navegador, sin límite, cuando se te acaban los del banco.'],
   ['Rango', 'Sube con las estrellas acumuladas resolviendo casos; desbloquea nuevos escenarios.'],
 ];

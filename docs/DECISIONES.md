@@ -414,6 +414,24 @@ Se pidió el contrato completo de MODOS 1.1 y una prueba que compruebe que al vo
   - Movimiento reducido: llamas, humo, latido del reloj, transición de entrada y chispas (no arrancan).
 - **e2e:** cuatro tamaños (se añade 360 × 640) en tema claro para todo, y los cuatro en oscuro para los modos nuevos. Además, `tests/e2e/modes-layout.spec.ts` fija lo corregido: plano, horas y estado a la vez; objetivos de 44 px; paleta de fuego con el tema oscuro; derrumbe desplazable; diálogo de acusación; "Comprobar" a la vista; sin scroll horizontal.
 
+## Expediente eliminado
+
+- **Decisión del usuario:** el modo Expediente (tres noches con el mismo reparto, errores y estrellas compartidos) se quita por completo, como si no hubiera existido. Nunca llegó a tener contenido: su tercera noche es de nivel Comisario y el banco publicado no tenía series.
+- **Qué se quitó:**
+  - El botón de la portada, la entrada de "Cómo se juega", "Expedientes completados" del perfil y "Siguiente noche" del cierre.
+  - Los flujos de `main.ts` y el presupuesto de errores compartido en el tablero.
+  - `game/expediente.ts` (`hm2:series`), `store.forceArchive()`, `recordSeriesCompletion` y el campo `series` del perfil.
+  - `'expediente'` de `CaseMode` y `SeriesDef`, y la opción `castOverride` del generador (solo la usaba el expediente).
+  - `public/cases/expedientes.json` y su entrada del manifiesto, su generación, validación e informe en los scripts, sus pruebas y todas sus menciones en el diseño (`DISENO_TECNICO.md`: el banco pasa de 600 a 540 casos).
+- **Sin cambios en la generación:** quitar `castOverride` no toca la rama normal del generador. Se comprobó generando las mismas 13 semillas (Novato, Inspector y Comisario) antes y después: salida idéntica byte a byte. Las suites lentas del solver pasan igual.
+- **Quien ya jugó:** `forgetExpediente()` (en `storage.ts`, al arrancar) borra una sola vez `hm2:series`, las claves `expediente:*` de `hm2:played` y un caso en curso que fuera una noche de expediente (si no, "Seguir el caso" pediría un fichero que ya no existe). `getProfile()` descarta el recuento `series`. Las estrellas ganadas se quedan en el rango: no se pueden separar y quitarlas sería un castigo.
+- **Se mantiene:** el tope de errores infinito (lo usan el tutorial y el Modo Incendio).
+- **Arreglos de paso:**
+  - La pantalla de "agotado" ya no dice "Has resuelto todos los casos" cuando el nivel no tiene ninguno. Ahora distingue tres situaciones: nivel sin casos, casos en escenarios aún bloqueados (cuántos) y todos jugados.
+  - Su botón "Modo infinito" tomaba la dificultad de `bank.cases[0]` y fallaba con un banco vacío; ahora sale del nivel (`diffForMode`).
+  - "Copiar enlace a este caso" solo aparece para ids que `#caso=` sabe abrir (N, I, C, D).
+- **Historia:** las entradas anteriores de este documento, `PLAN.md` y `PLAN_MODOS.md` que hablan del expediente se dejan como estaban: son historia de lo que se hizo. Las referencias de `docs/referencia/` no se tocan.
+
 ## Contenido y diseño
 
 - **Corrección de ruta bajo `base: "/hora-muerta/"`.** `Layout.astro` (heredado de la plantilla de Astro) enlazaba `/favicon.svg` y `/favicon.ico` con ruta absoluta; bajo GitHub Pages con `base: "/hora-muerta/"` esos enlaces romperían. Se corrige usando `import.meta.env.BASE_URL` en ambos `<link>`.

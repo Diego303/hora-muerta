@@ -67,7 +67,7 @@ export function renderProfile(root: HTMLElement, profile: Profile, options: Prof
             <tbody>${statsRow(profile)}</tbody>
           </table>
         </div>
-        <p class="intro">Racha diaria: ${streak.current}${streak.best > streak.current ? ` (mejor racha: ${streak.best})` : ''}. Expedientes completados: ${profile.series}.
+        <p class="intro">Racha diaria: ${streak.current}${streak.best > streak.current ? ` (mejor racha: ${streak.best})` : ''}.
           ${profile.legacySolvedV1 > 0 ? ` Además, ${profile.legacySolvedV1} casos resueltos en la versión anterior.` : ''}</p>
       </section>
 

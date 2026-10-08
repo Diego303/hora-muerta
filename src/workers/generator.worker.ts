@@ -4,11 +4,11 @@
 // mientras se juega el actual (pregeneración).
 import type { DiffIndex } from '../engine/clues';
 import { buildCaseCandidate, draftToCaseDef } from '../engine/generate';
-import type { CaseDef, CaseMode, MapId } from '../engine/types';
+import type { CaseDef, LevelMode, MapId } from '../engine/types';
 
 const BUDGET_MS = 8000;
 
-const MODE_BY_DIFF: Record<DiffIndex, Exclude<CaseMode, 'diario' | 'expediente'>> = {
+const MODE_BY_DIFF: Record<DiffIndex, LevelMode> = {
   0: 'novato',
   1: 'inspector',
   2: 'comisario',

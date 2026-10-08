@@ -4,7 +4,7 @@ import type { DiffIndex } from '../src/engine/clues';
 import type { CaseMode } from '../src/engine/types';
 
 export interface BankGroupConfig {
-  mode: Exclude<CaseMode, 'expediente'>;
+  mode: CaseMode;
   diff: DiffIndex;
   count: number;
   idPrefix: string;
@@ -13,12 +13,9 @@ export interface BankGroupConfig {
 /** `manifest.json.version`: cambia cuando el banco generado deja de ser compatible con el anterior (§12.6). */
 export const BANK_VERSION = '2026.09-a';
 
-/** Composición por defecto (600 casos): 170 + 190 + 120 + 60 + 20×3 = 600 (§12.1).
- * Comisario y Expediente necesitan R6_HYPOTHESIS (implementada en `src/engine/human.ts`,
- * ver docs/DECISIONES.md): antes de tenerla, una prueba con banco pequeño daba 0/2 en
- * Comisario; con R6, una comprobación rápida sobre 20 semillas dio 3 éxitos (15%,
- * parecido a la tasa de Inspector). Cada hueco de Comisario sigue siendo bastante más
- * caro que uno de Inspector, así que el banco completo puede tardar varias horas. */
+/** Composición por defecto (540 casos): 170 + 190 + 120 + 60 (§12.1).
+ * Comisario necesita R6_HYPOTHESIS (implementada en `src/engine/human.ts`, ver
+ * docs/DECISIONES.md) y cada hueco es mucho más caro que uno de Inspector. */
 export const BANK_GROUPS: BankGroupConfig[] = [
   { mode: 'novato', diff: 0, count: 170, idPrefix: 'N' },
   { mode: 'inspector', diff: 1, count: 190, idPrefix: 'I' },
@@ -27,10 +24,7 @@ export const BANK_GROUPS: BankGroupConfig[] = [
   { mode: 'diario', diff: 1, count: 60, idPrefix: 'D' },
 ];
 
-export const EXPEDIENTE_SERIES_COUNT = 20;
-export const EXPEDIENTE_ID_PREFIX = 'E';
-
-/** Mínimo razonable si se reduce el banco (§12.1): 70/70/40/20 sin expedientes. */
+/** Mínimo razonable si se reduce el banco (§12.1): 70/70/40/20. */
 export const MIN_BANK_GROUPS: BankGroupConfig[] = [
   { mode: 'novato', diff: 0, count: 70, idPrefix: 'N' },
   { mode: 'inspector', diff: 1, count: 70, idPrefix: 'I' },

@@ -3,18 +3,15 @@ import type { ViewDef, VisualMode } from './core/router';
 import { applyVisualMode } from './core/visualmode';
 import type { DiffIndex } from './engine/clues';
 import { MAPS } from './engine/content/maps';
-import { rngFromSeed, shuffle } from './engine/rng';
-import type { BankFile, CaseDef, CaseMode, MapId, SeriesDef } from './engine/types';
-import { getOrderSeed, getPlayed, loadBank, markPlayed, modeForDiff, nextUnplayed } from './game/bank';
-import type { SeriesProgress } from './game/expediente';
-import { clearSeriesProgress, loadExpedientes, loadSeriesProgress, startSeries } from './game/expediente';
+import type { BankFile, CaseDef, CaseMode, LevelMode, MapId } from './engine/types';
+import { diffForMode, getOrderSeed, loadBank, modeForDiff, nextUnplayed } from './game/bank';
 import type { InfiniteSession } from './game/infinite';
 import { reproduceCase, startInfiniteSession } from './game/infinite';
 import { getDailyCase } from './game/modes';
-import { hasReachedRank, isMapUnlocked, recordSeriesCompletion } from './game/progression';
+import { hasReachedRank, isMapUnlocked } from './game/progression';
 import { computeStars } from './game/scoring';
 import { clearSavedGame, loadSavedGame } from './game/session';
-import { getProfile, migrateFromV1, saveProfile } from './game/storage';
+import { forgetExpediente, getProfile, migrateFromV1 } from './game/storage';
 import { TUTORIAL_CASE } from './game/tutorial';
 import { initTheme, prefersReducedMotion, wireThemeToggles } from './ui/a11y';
 import { renderBoard } from './ui/board';
@@ -216,9 +213,6 @@ function mountLanding(): () => void {
     onResume: () => {
       void resumeGame();
     },
-    onExpediente: () => {
-      void startExpediente();
-    },
     onSettings: showSettings,
     onProfile: showProfile,
     onHelp: showHelp,
@@ -314,14 +308,15 @@ function showBoard(caseData: CaseDef, bankVersion: string | null, mapFilter: Map
   });
 }
 
-function showExhausted(bank: BankFile, mapFilter: MapId | null): void {
+function showExhausted(mode: LevelMode, bank: BankFile, mapFilter: MapId | null): void {
   router.replaceScreen(() => {
     renderExhausted(app, bank, mapFilter, {
+      unlockedMaps: unlockedMapIds(),
       onRestart: () => {
-        void startCasual(bank.mode as Exclude<CaseMode, 'diario' | 'expediente'>, mapFilter);
+        void startCasual(mode, mapFilter);
       },
       onInfinite: () => {
-        showInfinite(bank.cases[0].diff, mapFilter);
+        showInfinite(diffForMode(mode), mapFilter);
       },
       onBackToLanding: showLanding,
     });
@@ -329,12 +324,12 @@ function showExhausted(bank: BankFile, mapFilter: MapId | null): void {
   });
 }
 
-async function startCasual(mode: Exclude<CaseMode, 'diario' | 'expediente'>, mapFilter: MapId | null): Promise<void> {
+async function startCasual(mode: LevelMode, mapFilter: MapId | null): Promise<void> {
   try {
     const bank = await loadBank(mode);
     const next = nextUnplayed(bank, mapFilter, unlockedMapIds());
     if (!next) {
-      showExhausted(bank, mapFilter);
+      showExhausted(mode, bank, mapFilter);
       return;
     }
     showBoard(next, bank.version, mapFilter);
@@ -345,13 +340,12 @@ async function startCasual(mode: Exclude<CaseMode, 'diario' | 'expediente'>, map
 
 async function nextCase(finished: CaseDef, mapFilter: MapId | null): Promise<void> {
   // El caso del día es uno solo para todos (§13): no hay "siguiente" dentro del
-  // mismo día. El expediente tiene su propio flujo (showExpedienteNight);
-  // nunca llega aquí.
+  // mismo día.
   if (finished.mode === 'diario') {
     showLanding();
     return;
   }
-  await startCasual(finished.mode as Exclude<CaseMode, 'diario' | 'expediente'>, mapFilter);
+  await startCasual(finished.mode, mapFilter);
 }
 
 async function startDaily(): Promise<void> {
@@ -373,10 +367,6 @@ async function resumeGame(): Promise<void> {
     showLanding();
     return;
   }
-  if (saved.mode === 'expediente') {
-    await resumeExpediente();
-    return;
-  }
   try {
     const bank = await loadBank(saved.mode);
     const caseData = bank.cases.find((c) => c.id === saved.caseId);
@@ -390,89 +380,6 @@ async function resumeGame(): Promise<void> {
   } catch {
     toast('No se ha podido retomar el caso. Comprueba tu conexión e inténtalo de nuevo.');
   }
-}
-
-/** Expediente (§13): 3 noches con el mismo reparto y un presupuesto de errores
- * compartido (game/expediente.ts); "sin repetir" se aplica a la serie entera,
- * no a cada noche por separado, con su propia clave de versión (bank.ts). */
-function expedienteVersionKey(bankVersion: string): string {
-  return `expediente:${bankVersion}`;
-}
-
-async function startExpediente(): Promise<void> {
-  try {
-    const data = await loadExpedientes();
-    if (data.series.length === 0) {
-      toast('Todavía no hay expedientes disponibles.');
-      return;
-    }
-    const versionKey = expedienteVersionKey(data.version);
-    const rng = rngFromSeed(`${getOrderSeed()}|${versionKey}`);
-    const order = shuffle(rng, data.series);
-    const played = getPlayed(versionKey);
-    const series = order.find((s) => !played.has(s.id));
-    if (!series) {
-      toast('Has jugado todos los expedientes disponibles.');
-      return;
-    }
-    const progress = startSeries(series.id, data.version);
-    showExpedienteNight(series, progress);
-  } catch {
-    toast('No se ha podido cargar el expediente.');
-  }
-}
-
-async function resumeExpediente(): Promise<void> {
-  const progress = loadSeriesProgress();
-  if (!progress) {
-    showLanding();
-    return;
-  }
-  try {
-    const data = await loadExpedientes();
-    const series = data.series.find((s) => s.id === progress.id);
-    if (!series) {
-      clearSeriesProgress();
-      toast('Ese expediente ya no está disponible.');
-      showLanding();
-      return;
-    }
-    showExpedienteNight(series, progress);
-  } catch {
-    toast('No se ha podido retomar el expediente. Comprueba tu conexión e inténtalo de nuevo.');
-  }
-}
-
-function showExpedienteNight(series: SeriesDef, progress: SeriesProgress): void {
-  router.showView('game', {
-    hash: null,
-    mount: () =>
-      renderBoard(app, series.cases[progress.index], {
-        onExit: showLanding,
-        onNextCase: () => {
-          void advanceExpediente(series);
-        },
-        bankVersion: null,
-        ...ACADEMY_LINKS,
-      }),
-  });
-}
-
-async function advanceExpediente(series: SeriesDef): Promise<void> {
-  const progress = loadSeriesProgress();
-  if (!progress || progress.done) {
-    const stars = progress?.starsSoFar ?? 0;
-    markPlayed(expedienteVersionKey(progress?.version ?? ''), series.id);
-    clearSeriesProgress();
-    // §16.3 "expedientes completados": la serie terminó, se resolvieran o no
-    // las 3 noches (progress.done también se marca al agotar el presupuesto
-    // compartido, expediente.ts#registerSeriesError).
-    if (progress) saveProfile(recordSeriesCompletion(getProfile()));
-    toast(`Expediente cerrado: ${stars}/9 estrellas.`);
-    showLanding();
-    return;
-  }
-  showExpedienteNight(series, progress);
 }
 
 /** Modo infinito (§13): genera en un Web Worker, con presupuesto de 8 s por
@@ -606,5 +513,6 @@ function registerServiceWorker(): void {
 
 initTheme();
 migrateFromV1(computeStars);
+forgetExpediente();
 registerServiceWorker();
 routeFromHash();

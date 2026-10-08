@@ -7,7 +7,7 @@
 // console.time); ver docs/DECISIONES.md.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import type { BankFile, CaseDef, SeriesDef } from '../src/engine/types';
+import type { BankFile, CaseDef } from '../src/engine/types';
 import { BANK_GROUPS } from './bank.config';
 
 const CASES_DIR = path.join(process.cwd(), 'public', 'cases');
@@ -63,12 +63,6 @@ function main(): void {
     reportGroup(group.mode, cases, lines);
     lines.push('');
   }
-
-  const expedientes = readJSON<{ series: SeriesDef[] }>('expedientes.json');
-  const expedienteCases = (expedientes?.series ?? []).flatMap((s) => s.cases);
-  allCases.push(...expedienteCases);
-  reportGroup('expediente', expedienteCases, lines);
-  lines.push('');
 
   lines.push(`## Total: ${allCases.length} casos`);
   lines.push('');

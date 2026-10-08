@@ -93,8 +93,6 @@ export interface Profile {
   times: { n: number[]; i: number[]; c: number[] };
   arch: Record<Archetype, number>;
   archExample: Partial<Record<Archetype, ArchetypeExample>>;
-  /** Expedientes completados (todas las noches jugadas, se archivara o no la última). */
-  series: number;
   /** Casos resueltos en v1 antes de migrar (§18): un recuento sin desglose
    * por nivel ni estrellas, porque v1 no los guardaba; se muestra aparte en
    * el perfil, no se suma a `solved` ni a `stars`. */
@@ -122,12 +120,13 @@ export const DEFAULT_PROFILE: Profile = {
   times: { n: [], i: [], c: [] },
   arch: { ...EMPTY_ARCH },
   archExample: {},
-  series: 0,
   legacySolvedV1: 0,
 };
 
 export function getProfile(): Profile {
-  const saved = readJSON<Partial<Profile>>('profile', {});
+  const saved = readJSON<Partial<Profile> & { series?: unknown }>('profile', {});
+  // `series` era el recuento del modo Expediente, que ya no existe: no se arrastra.
+  delete saved.series;
   return {
     ...DEFAULT_PROFILE,
     ...saved,
@@ -177,6 +176,27 @@ export function migrateFromV1(computeStars: (errors: number, hints: number) => n
   } catch {
     // modo privado, cuota superada o hm:stats corrupto: se ignora sin migrar
   }
+}
+
+/**
+ * Limpieza única de lo que guardaba el modo Expediente, que se eliminó: el progreso
+ * de la serie (`hm2:series`), sus "ya jugados" (`hm2:played`, claves `expediente:*`)
+ * y un caso en curso que fuera una de sus noches (`hm2:game`, modo `expediente`),
+ * que "Seguir el caso" ya no podría abrir. El recuento del perfil lo descarta
+ * getProfile(). Es idempotente: si no hay nada, no escribe nada.
+ */
+export function forgetExpediente(): void {
+  try {
+    localStorage.removeItem(`${PREFIX}series`);
+  } catch {
+    // almacenamiento no disponible: no hay nada que limpiar
+  }
+  const played = readJSON<Record<string, unknown> | null>('played', null);
+  if (played && Object.keys(played).some((k) => k.startsWith('expediente:'))) {
+    writeJSON('played', Object.fromEntries(Object.entries(played).filter(([k]) => !k.startsWith('expediente:'))));
+  }
+  const game = readJSON<{ mode?: string } | null>('game', null);
+  if (game?.mode === 'expediente') writeJSON('game', null);
 }
 
 /** Tutorial guiado (game/tutorial.ts): solo para el texto de la portada

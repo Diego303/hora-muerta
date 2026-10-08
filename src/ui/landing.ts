@@ -17,14 +17,12 @@ const MODE_LABEL: Record<CaseMode, string> = {
   inspector: 'Inspector',
   comisario: 'Comisario',
   diario: 'Diario',
-  expediente: 'Expediente',
 };
 
 export interface LandingOptions {
   onStart: (diff: 0 | 1 | 2, mapFilter: MapId | null) => void;
   onDaily: () => void;
   onResume: () => void;
-  onExpediente: () => void;
   onSettings: () => void;
   onProfile: () => void;
   onHelp: () => void;
@@ -82,7 +80,6 @@ export function renderLanding(root: HTMLElement, options: LandingOptions): () =>
             <button class="btn ghost" data-go="academy">${ICO_BULB}Calentamiento</button>
             <button class="btn danger" data-go="fire">${ICO_FLAME}Modo Incendio</button>
             <a class="btn ghost" href="#niveles">Elegir nivel</a>
-            <button class="btn ghost" id="goExpediente">Expediente</button>
           </div>
           <p class="warmup"><button class="link" data-go="academy">Calienta 5 minutos antes del caso del día</button></p>
           <p class="resume" id="resume" hidden><button class="link" id="resumeBtn"></button></p>
@@ -188,7 +185,6 @@ export function renderLanding(root: HTMLElement, options: LandingOptions): () =>
     });
   });
   root.querySelector('#goDaily')?.addEventListener('click', () => options.onDaily());
-  root.querySelector('#goExpediente')?.addEventListener('click', () => options.onExpediente());
   root.querySelector('#goSettings')?.addEventListener('click', () => options.onSettings());
   root.querySelector('#goHelp')?.addEventListener('click', () => options.onHelp());
   root.querySelector('#goProfile')?.addEventListener('click', () => options.onProfile());

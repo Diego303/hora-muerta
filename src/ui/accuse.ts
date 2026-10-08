@@ -2,15 +2,15 @@
 // Acusar. Los descartados aparecen atenuados, pero se pueden elegir. Un error
 // no revela qué parte falló. Qué pasa con el resultado (cerrar el caso, avisar
 // cuántas quedan) lo decide quien llama: el presupuesto de errores no es
-// siempre "2 por caso" (un expediente lo comparte entre sus 3 noches, §13).
+// siempre "2 por caso" (el Modo Incendio resta tiempo en vez de errores).
 import type { ClueTextContext } from '../engine/text';
 import type { AccusationOutcome } from '../game/scoring';
 import type { GameStore } from '../game/store';
 import { remainingSuspects, TWO_LEFT_STEPS } from '../modes/gym/bridge';
 
 export interface AccuseOptions {
-  /** Texto del contador de errores ("Errores: 1/2", o para un expediente
-   * "Quedan 2 acusaciones para todo el expediente"). */
+  /** Texto del contador de errores ("Errores: 1/2", o en el Modo Incendio
+   * "Cada acusación errónea resta 30 segundos."). */
   errorsLabel: string;
   onOutcome: (outcome: AccusationOutcome) => void;
   /** "Practicar remates" (MODOS 3.10.1): solo donde el caso en curso se puede guardar y retomar. */

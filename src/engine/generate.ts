@@ -256,12 +256,6 @@ function computeSignature(mapId: MapId, rv: number, td: number, truth: Truth, cu
  */
 export interface BuildCaseOptions {
   /**
-   * Reparto fijo (índices en CAST, cualquier orden): se usan sus primeros N
-   * tras ordenar alfabéticamente. Para el modo Expediente (§12.2): mismo mapa
-   * y mismo reparto de 5 en las tres noches; la de Novato usa los 4 primeros.
-   */
-  castOverride?: number[];
-  /**
    * Tope estricto de pistas servidas (Modo Incendio, "Inspector exprés": 9 como
    * mucho, docs/MODOS.md 2.5). Sin él se aplica el de la dificultad, que a partir
    * del tercer intento tolera pasarse.
@@ -273,9 +267,6 @@ export function buildCaseCandidate(seed: string, diff: DiffIndex, mapId?: MapId,
   const params = DIFFICULTY[diff];
   const fixedMap = mapId ? MAPS.find((m) => m.id === mapId) : undefined;
   if (mapId && !fixedMap) throw new Error(`Mapa desconocido: ${mapId}`);
-  const sortedCastOverride = options?.castOverride
-    ? options.castOverride.slice().sort((a, b) => CAST[a].name.localeCompare(CAST[b].name, 'es'))
-    : undefined;
 
   for (let attempt = 0; attempt < GENERATION_ATTEMPTS; attempt++) {
     const rng = rngFromSeed(`${seed}|${diff}|${attempt}`);
@@ -284,14 +275,12 @@ export function buildCaseCandidate(seed: string, diff: DiffIndex, mapId?: MapId,
     const roomCount = map.rooms.length;
     const paths = enumeratePaths(graph.adj, roomCount, params.T);
 
-    const castIndices = sortedCastOverride
-      ? sortedCastOverride.slice(0, params.N)
-      : shuffle(
-          rng,
-          CAST.map((_, i) => i),
-        )
-          .slice(0, params.N)
-          .sort((a, b) => CAST[a].name.localeCompare(CAST[b].name, 'es'));
+    const castIndices = shuffle(
+      rng,
+      CAST.map((_, i) => i),
+    )
+      .slice(0, params.N)
+      .sort((a, b) => CAST[a].name.localeCompare(CAST[b].name, 'es'));
     const objectIndices = shuffle(
       rng,
       OBJECTS.map((_, i) => i),

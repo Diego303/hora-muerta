@@ -16,11 +16,9 @@ export interface AccusationOutcome {
   result: CaseResult;
 }
 
-/** Con 2 acusaciones erróneas el caso se archiva sin resolver (§14.1). Un
- * expediente comparte el presupuesto entre sus 3 noches (§13): board.ts pasa
- * `Infinity` para que una noche nunca se archive por sí sola, y lleva la
- * cuenta compartida aparte (game/expediente.ts), archivando la serie entera
- * cuando toque. */
+/** Con 2 acusaciones erróneas el caso se archiva sin resolver (§14.1). El
+ * tutorial y el Modo Incendio no tienen ese presupuesto: board.ts pasa
+ * `Infinity` y el caso nunca se archiva por errores. */
 const DEFAULT_MAX_ERRORS = 2;
 
 export function checkAccusation(caseData: CaseDef, culprit: Sus, weapon: Obj, priorErrors: number, maxErrors = DEFAULT_MAX_ERRORS): AccusationOutcome {

@@ -17,8 +17,8 @@ import { solveHuman } from '../src/engine/human';
 import type { HumanContext } from '../src/engine/human';
 import { enumeratePaths } from '../src/engine/paths';
 import { clueText, plainText } from '../src/engine/text';
-import type { BankFile, CaseDef, MapDef, SeriesDef } from '../src/engine/types';
-import { BANK_GROUPS, EXPEDIENTE_ID_PREFIX, FIRE_GROUPS, MAP_QUOTA_TOLERANCE } from './bank.config';
+import type { BankFile, CaseDef, MapDef } from '../src/engine/types';
+import { BANK_GROUPS, FIRE_GROUPS, MAP_QUOTA_TOLERANCE } from './bank.config';
 import { fireCaseErrors } from './fire-bank';
 import type { FireCase } from '../src/modes/fire/types';
 
@@ -120,24 +120,6 @@ function main(): void {
       else signatures.set(c.sig, c.id);
     }
     reportMapQuota(group.mode, bank.cases, warnings);
-  }
-
-  const expedienteFile = path.join(OUT_DIR, 'expedientes.json');
-  if (existsSync(expedienteFile)) {
-    const { series } = JSON.parse(readFileSync(expedienteFile, 'utf8')) as { series: SeriesDef[] };
-    for (const s of series) {
-      if (!s.id.startsWith(EXPEDIENTE_ID_PREFIX)) errors.push(`${s.id}: prefijo de id inesperado`);
-      if (s.cases.length !== 3) errors.push(`${s.id}: la serie no tiene 3 casos`);
-      for (const c of s.cases) {
-        validateCase(c, errors);
-        allCases.push(c);
-        const owner = signatures.get(c.sig);
-        if (owner) errors.push(`${c.id}: firma repetida con ${owner}`);
-        else signatures.set(c.sig, c.id);
-      }
-    }
-  } else {
-    warnings.push('expedientes.json no existe todavía.');
   }
 
   // Modo Incendio (docs/MODOS.md 2.5): además de todo lo del caso normal, el foco,
