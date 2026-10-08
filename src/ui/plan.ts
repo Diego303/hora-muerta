@@ -2,6 +2,7 @@
 // el motor (src/engine) no depende de esto.
 import { timeLabel } from '../engine/text';
 import type { FeatureIcon, Hour, MapDef, RoomDef } from '../engine/types';
+import { inkOn } from './ink';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const GRID = 40;
@@ -221,7 +222,7 @@ export function buildPlan(svg: SVGSVGElement, map: MapDef, opts: PlanOptions): P
           slot += 1;
           const group = svgEl('g', { class: `mk ${value === 1 ? 'yes' : 'no'}`, transform: `translate(${x},${y})` }, gMarks);
           svgEl('circle', { r: 10.5, fill: suspect.color, stroke: suspect.color }, group);
-          const text = svgEl('text', {}, group);
+          const text = svgEl('text', { fill: inkOn(suspect.color) }, group);
           text.textContent = suspect.init;
           if (value === 2) svgEl('line', { x1: -9, y1: 9, x2: 9, y2: -9 }, group);
         }
@@ -276,7 +277,7 @@ export function buildPlan(svg: SVGSVGElement, map: MapDef, opts: PlanOptions): P
         tokenNodes = suspects.map((s) => {
           const group = svgEl('g', { class: 'tok' }, gTokens);
           svgEl('circle', { r: 11, fill: s.color }, group);
-          const text = svgEl('text', {}, group);
+          const text = svgEl('text', { fill: inkOn(s.color) }, group);
           text.textContent = s.init;
           const title = svgEl('title', {}, group);
           title.textContent = s.name;

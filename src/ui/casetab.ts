@@ -5,6 +5,7 @@ import { timeLabel } from '../engine/text';
 import type { ClueTextContext } from '../engine/text';
 import type { CaseDef, MapDef } from '../engine/types';
 import type { GameStore } from '../game/store';
+import { inkOn } from './ink';
 
 export function renderCaseTab(container: HTMLElement, map: MapDef, caseData: CaseDef, ctx: ClueTextContext, store: GameStore): void {
   const state = store.getState();
@@ -17,7 +18,7 @@ export function renderCaseTab(container: HTMLElement, map: MapDef, caseData: Cas
       return (
         `<li class="${discarded ? 'discarded' : ''}">` +
         `<button class="discard-btn" data-c="${i}" aria-pressed="${discarded}">` +
-        `<span class="chip" style="background:${s.color}">${s.name[0]}</span>` +
+        `<span class="chip" style="background:${s.color};color:${inkOn(s.color)}">${s.name[0]}</span>` +
         `<span class="name">${s.name}</span><span class="role">${s.role}</span>` +
         `</button></li>`
       );

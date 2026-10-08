@@ -89,6 +89,10 @@ svg {
   text-decoration: underline;
   text-underline-offset: 3px;
   color: var(--ink-2);
+  /* Objetivo táctil de 44 px aunque parezca un enlace de texto. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
 }
 .icon-btn {
   background: none;
@@ -111,7 +115,7 @@ svg {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(24px + var(--toast-lift, 0px) + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   background: var(--ink);
   color: var(--paper);
@@ -177,6 +181,36 @@ svg {
   .mode-veil {
     display: none;
   }
+}
+
+/* Los avisos salen por encima de la barra de Pista/Acusar del tablero en el móvil (y
+   de la guía del tutorial si está abierta), en vez de taparla. */
+@media (max-width: 1099px) {
+  body:has(.actionbar) {
+    --toast-lift: 76px;
+  }
+  body.tut-on:has(.actionbar) {
+    --toast-lift: calc(76px + var(--coach-h, 0px));
+  }
+}
+
+/* ---------- nombres de sospechoso en los textos ---------- */
+/* El nombre va en la tinta del tema (se lee en claro, oscuro y fuego) con un punto de
+   su color delante, como su ficha en el plano. Antes el nombre entero iba en su color
+   y algunos bajaban de 3:1 (ámbar sobre claro, morado sobre oscuro). */
+.who {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.who::before {
+  content: '';
+  display: inline-block;
+  width: 0.62em;
+  height: 0.62em;
+  margin-right: 0.28em;
+  border-radius: 50%;
+  background: var(--c, currentColor);
+  vertical-align: 0.04em;
 }
 
 /* ---------- miniplano compartido (ui/planlite.ts) ---------- */
@@ -279,7 +313,6 @@ svg {
   font-family: var(--body);
   font-size: 13px;
   font-weight: 700;
-  fill: #15222c;
   pointer-events: none;
 }
 

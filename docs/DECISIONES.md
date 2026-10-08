@@ -451,6 +451,28 @@ Se pidió el contrato completo de MODOS 1.1 y una prueba que compruebe que al vo
   - Quien empieza puede jugar 3, y la pantalla de agotado le dice que quedan 2 en escenarios bloqueados.
 - **Validación:** `bank:validate`, 434 casos correctos. Pruebas: `tests/bank/comisario.test.ts` y `tests/bank/group.test.ts`, más el e2e `tests/e2e/comisario.spec.ts`.
 
+## Revisión de diseño y responsive (tras F7)
+
+Revisión del código y del CSS de todas las pantallas, sin navegador, con las medidas calculadas. Lo corregido:
+
+- **Hoja de acusación:**
+  - En tableta y escritorio (≥ 700 px) es un diálogo centrado: antes salía pegada al pie también en el ordenador. En el móvil sigue siendo hoja inferior.
+  - El velo de fondo era `--ink` al 45 %, que en tema oscuro y en fuego es claro y aclaraba en vez de oscurecer; ahora es un oscuro fijo.
+  - Tocar fuera de la hoja la cierra.
+- **Nombres de sospechoso en los textos (`.who`):** iban escritos en el color del sospechoso y varios bajaban de 3:1 (ámbar sobre claro 2,2:1, morado sobre oscuro 2,9:1). Ahora van en la tinta del tema, en negrita, con un punto de su color delante, como la ficha del plano. Vale para pistas, pistas del inspector, cadena de deducción, explicaciones del calentamiento y la cabecera de la tabla de objetos.
+- **Iniciales sobre fichas de color** (plano, marcas, pestaña Caso, miniplano): la letra es blanca u oscura según cuál contraste más (`ui/ink.ts`). Con letra blanca siempre, el ámbar se quedaba en 2,4:1; ahora ninguna ficha baja de 4:1.
+- **Tutorial en móvil y tableta:** la guía flotaba encima de la barra de Pista/Acusar y de la hoja. Ahora el tablero (y el plano ampliado, y la hoja desplegada) se encogen lo que ella mide (`--coach-h`, medido con `ResizeObserver`).
+- **Botones con forma de enlace (`.link`):** "Ocultar" y "Salir" de la guía, "Seguir el caso" y "Rejugar el ejemplo" medían unos 20 px de alto. Ahora todos los `.link` tienen 44 px.
+- **Avisos (toast):** en el móvil salían encima de la barra de Acusar; ahora suben por encima de ella (y de la guía del tutorial).
+- **Móvil en horizontal:** la rejilla de dos columnas empieza en 600 px de ancho cuando la pantalla es baja (antes en 700). Un iPhone SE tumbado (667 × 375) se quedaba en una columna con el plano de unos 75 px. Las reglas de una columna son ahora el complemento exacto de la rejilla.
+- **Incendio:**
+  - El plano ampliado tapa la cabecera y con ella el reloj, mientras el tiempo seguía corriendo; ahora lleva su propia copia del reloj.
+  - Las estrellas y el cronómetro de Ajustes se ocultan por CSS: el cronómetro era un segundo reloj y el tablero lo volvía a mostrar en cada repintado.
+  - En móviles de 700 px de alto o menos, la hoja de pistas se quedaba en una sola pista: la parte de arriba vuelve a 52dvh y el plano a 33dvh (siguen cabiendo plano, horas y estado; la hoja muestra dos).
+- **Cronómetro de la cabecera:** no tenía estilo (podía partirse); ahora cifras tabulares y sin salto.
+- **Revisado y bien:** capas y `z-index` (embers 5, hoja desplegada 15, plano ampliado 30, guía 35, acusación 40, pausa 44, derrumbe 46, confirmación 60, avisos 70, velo de modo 90); horas con 4 franjas y tabla de 5 objetos a 360 px; colores fijos del CSS (tema sepia del plano, mapa de la ciudad, sombras).
+- **Pruebas:** `tests/ui/ink.test.ts`; e2e de la acusación (abajo en el móvil, centrada en tableta y escritorio, se cierra tocando fuera). Las comprobaciones de 44 px y de plano/horas/estado de `modes-layout.spec.ts` siguen cubriendo el incendio.
+
 ## Contenido y diseño
 
 - **Corrección de ruta bajo `base: "/hora-muerta/"`.** `Layout.astro` (heredado de la plantilla de Astro) enlazaba `/favicon.svg` y `/favicon.ico` con ruta absoluta; bajo GitHub Pages con `base: "/hora-muerta/"` esos enlaces romperían. Se corrige usando `import.meta.env.BASE_URL` en ambos `<link>`.

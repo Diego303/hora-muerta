@@ -93,3 +93,22 @@ test('calentamiento: salas de 44 px, "Comprobar" al alcance del pulgar y sin scr
   // El número de ejercicio va primero: si la etiqueta no cabe, se corta el nombre del bloque.
   await expect(page.locator('.gym-prog span')).toHaveText(/^Ejercicio 1 de \d+ · /);
 });
+
+test('acusación: hoja inferior en el móvil y diálogo centrado en tableta y escritorio', async ({ page }) => {
+  await enterBuilding(page);
+  await page.locator('#accuseBtn').click();
+  const sheet = page.locator('.accuse-sheet');
+  await expect(sheet).toBeVisible();
+  const box = await sheet.boundingBox();
+  const vp = page.viewportSize();
+  if (!box || !vp) throw new Error('sin medidas');
+  if (vp.width >= 700) {
+    // Centrado: el mismo margen arriba que abajo (con un píxel de tolerancia).
+    expect(Math.abs(box.y - (vp.height - box.y - box.height))).toBeLessThanOrEqual(1);
+  } else {
+    expect(Math.round(box.y + box.height)).toBe(vp.height);
+  }
+  // Tocar fuera de la hoja la cierra.
+  await page.mouse.click(4, 4);
+  await expect(page.locator('.accuse-overlay')).toHaveCount(0);
+});

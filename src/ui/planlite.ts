@@ -4,6 +4,7 @@
 // cadena (función pura, comprobable en Node); renderPlanLite solo lo escribe
 // en un <svg> y conecta los toques.
 import { CHIP_COLORS } from '../engine/content/cast';
+import { inkOn } from './ink';
 import type { FloorPlan, Room } from '../engine/types';
 
 export interface PlanLiteToken {
@@ -196,7 +197,7 @@ export function planLiteMarkup(map: FloorPlan, options: PlanLiteOptions = {}): s
     const cy = t.caption ? c.y - 4 : c.y;
     const color = t.color ?? CHIP_COLORS[t.c % CHIP_COLORS.length];
     out += `<g class="pl-token${t.dashed ? ' dashed' : ''}"><circle cx="${c.x + dx}" cy="${cy}" r="${t.caption ? 13 : 12}" fill="${color}" stroke="${t.dashed ? 'currentColor' : '#fff'}" stroke-width="${t.dashed ? 2.4 : 1.6}"${t.dashed ? ' stroke-dasharray="4 3"' : ''}/>`;
-    out += `<text x="${c.x + dx}" y="${cy + 4.5}" text-anchor="middle" class="pl-token-label">${esc(t.label ?? String(t.c + 1))}</text>`;
+    out += `<text x="${c.x + dx}" y="${cy + 4.5}" text-anchor="middle" class="pl-token-label" fill="${inkOn(color)}">${esc(t.label ?? String(t.c + 1))}</text>`;
     if (t.caption) out += `<text x="${c.x + dx}" y="${cy + 29}" text-anchor="middle" class="pl-token-caption">${esc(t.caption)}</text>`;
     out += '</g>';
   }

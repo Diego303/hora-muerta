@@ -51,10 +51,6 @@ export function attachFireHud(
   const bar = root.querySelector<HTMLElement>('.gbar');
   bar?.classList.add('fire-gbar');
   game.classList.add('fire-game');
-  // Las estrellas del tablero no cuentan aquí (el incendio da las suyas al resolver),
-  // y en el móvil su hueco hace falta para el reloj.
-  const stars = root.querySelector<HTMLElement>('#starsDisplay');
-  if (stars) stars.hidden = true;
   const clock = document.createElement('span');
   clock.className = 'fire-clock';
   clock.id = 'fireClock';
@@ -147,11 +143,29 @@ export function attachFireHud(
   const clueSeen: string[] = Array.from({ length: clueCount }, (_, i) => play.clueState(i));
   let lastMinuteSaid = false;
 
+  /** El plano ampliado tapa la cabecera: mientras está abierto lleva su propia copia
+   * del reloj (solo visual; el anuncio para lectores de pantalla es el de siempre). */
+  function mirrorClock(text: string, hot: boolean): void {
+    const overlay = document.querySelector<HTMLElement>('.plan-overlay:not(.recon-overlay)');
+    if (!overlay) return;
+    let mini = overlay.querySelector<HTMLElement>('.fire-clock');
+    if (!mini) {
+      mini = document.createElement('span');
+      mini.className = 'fire-clock';
+      mini.setAttribute('aria-hidden', 'true');
+      overlay.appendChild(mini);
+    }
+    mini.textContent = text;
+    mini.classList.toggle('hot', hot);
+  }
+
   function tick(): void {
     const t = run.consumed();
     const left = run.remaining();
+    const hot = left <= FIRE_LAST_MINUTE_S && !play.solved;
     clock.textContent = clockText(left);
-    clock.classList.toggle('hot', left <= FIRE_LAST_MINUTE_S && !play.solved);
+    clock.classList.toggle('hot', hot);
+    mirrorClock(clock.textContent, hot);
     if (buildingFill) buildingFill.style.width = `${((left / FIRE_TOTAL_S) * 100).toFixed(2)}%`;
     status.textContent = fireStatusText(map.rooms, ign, t);
     for (const layer of layers) layer.update(t);
@@ -214,7 +228,6 @@ export function attachFireHud(
       closeNight?.();
       bar?.classList.remove('fire-gbar');
       game.classList.remove('fire-game');
-      if (stars) stars.hidden = false;
       clock.remove();
       building.remove();
       status.remove();

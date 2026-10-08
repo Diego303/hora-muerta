@@ -204,12 +204,21 @@ export function startTutorialCoach(root: HTMLElement, store: GameStore, plan: Pl
   }, 200);
   const onResize = (): void => placeCoach();
   window.addEventListener('resize', onResize);
+  // En móvil y tableta la guía flota abajo: el tablero se encoge lo que ella ocupe
+  // (--coach-h, ver game.css), así no tapa la barra de Acusar ni la hoja.
+  const rootStyle = document.documentElement.style;
+  const coachSize = new ResizeObserver(() => {
+    rootStyle.setProperty('--coach-h', coach.classList.contains('dock') ? '0px' : `${coach.offsetHeight}px`);
+  });
+  coachSize.observe(coach);
 
   function cleanup(): void {
     unsubscribe();
     clearInterval(autoAdvanceTimer);
     if (scrollTimer) clearTimeout(scrollTimer);
     window.removeEventListener('resize', onResize);
+    coachSize.disconnect();
+    rootStyle.removeProperty('--coach-h');
     document.body.classList.remove('tut-on');
     root.querySelectorAll('.tut-target').forEach((n) => n.classList.remove('tut-target'));
     root.querySelector('#mapSvg #tutOv')?.remove();

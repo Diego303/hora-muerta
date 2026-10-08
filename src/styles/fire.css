@@ -68,6 +68,17 @@
   border-radius: 3px;
   white-space: nowrap;
 }
+/* Copia del reloj en el plano ampliado, que tapa la cabecera (ui/hud.ts). */
+.plan-overlay .fire-clock {
+  position: absolute;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  left: 10px;
+  z-index: 1;
+  background: var(--paper);
+}
+.plan-overlay:has(.fire-clock) {
+  padding-top: calc(56px + env(safe-area-inset-top, 0px));
+}
 .fire-clock.hot {
   color: var(--on-pencil);
   background: var(--pencil);
@@ -229,6 +240,12 @@
 /* ---------- cabecera: barra del edificio y línea de estado ---------- */
 .fire-gbar {
   position: relative;
+}
+/* En el incendio manda su reloj: ni las estrellas del caso normal (el incendio da las
+   suyas al resolver) ni el cronómetro de Ajustes, que sería un segundo reloj. */
+.fire-gbar .stars,
+.fire-gbar .timer {
+  display: none;
 }
 .firebar {
   position: absolute;
@@ -627,7 +644,7 @@
    A 390 × 844 tienen que verse a la vez el plano, las horas y la línea de estado.
    El informe del caso (víctima, sala, hora) se quita de encima del plano: la víctima
    ya está dibujada en él y el texto sigue en la pestaña Caso. */
-@media (max-width: 699px) {
+@media (max-width: 599px), (max-width: 699px) and (min-height: 560px) {
   .fire-game .brief {
     display: none;
   }
@@ -641,7 +658,18 @@
     max-height: min(38dvh, 46vh);
   }
 }
-@media (min-width: 700px) and (max-height: 559px) {
+/* Móviles bajos (p. ej. 360 × 640): con 57dvh arriba la hoja de pistas se quedaba en una
+   sola pista. Se vuelve a los 52dvh del caso normal y el plano cede un poco: siguen
+   cabiendo plano, horas y estado (219 + 52 + 55 = 326 de 333 px) y la hoja muestra dos. */
+@media (max-width: 599px) and (max-height: 700px), (max-width: 699px) and (min-height: 560px) and (max-height: 700px) {
+  .fire-game .game-main {
+    max-height: 52dvh;
+  }
+  .fire-game .plan-wrap .plan {
+    max-height: 33dvh;
+  }
+}
+@media (min-width: 600px) and (max-height: 559px) {
   .fire-game .brief {
     display: none;
   }
@@ -650,7 +678,18 @@
 @media (prefers-reduced-motion: reduce) {
   .fl-flame,
   .fl-smoke,
-  .fire-clock.hot {
+  /* Copia del reloj en el plano ampliado, que tapa la cabecera (ui/hud.ts). */
+.plan-overlay .fire-clock {
+  position: absolute;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  left: 10px;
+  z-index: 1;
+  background: var(--paper);
+}
+.plan-overlay:has(.fire-clock) {
+  padding-top: calc(56px + env(safe-area-inset-top, 0px));
+}
+.fire-clock.hot {
     animation: none;
   }
 }

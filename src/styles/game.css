@@ -109,7 +109,7 @@
   font-size: 12px;
   text-anchor: middle;
   dominant-baseline: central;
-  fill: #fff;
+  /* El color de la letra lo pone ui/plan.ts según el de la ficha (ui/ink.ts). */
   pointer-events: none;
 }
 .mk.no circle {
@@ -192,6 +192,13 @@
 }
 .gbar .stars {
   font-size: 0.85rem;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.gbar .timer {
+  flex: none;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
   color: var(--ink-2);
   white-space: nowrap;
 }
@@ -487,10 +494,7 @@
   margin: 0 0 4px;
 }
 .hint-panel .link {
-  display: inline-flex;
-  align-items: center;
   font-weight: 700;
-  min-height: 44px;
 }
 
 .plan-expand-btn {
@@ -532,7 +536,9 @@
   z-index: 1;
 }
 
-@media (min-width: 700px) and (max-width: 1099px), (min-width: 700px) and (max-height: 559px) {
+/* Rejilla de dos columnas: tableta, y móvil en horizontal desde 600 px de ancho (un
+   iPhone SE tumbado, 667 × 375, se quedaba en una columna con el plano de 75 px). */
+@media (min-width: 700px) and (max-width: 1099px), (min-width: 600px) and (max-height: 559px) {
   .game {
     display: grid;
     grid-template-columns: minmax(0, 1.1fr) minmax(280px, 1fr);
@@ -700,10 +706,7 @@
   color: var(--ink-2);
   margin-right: 0.3em;
 }
-.clue-text .who {
-  color: var(--c);
-  font-weight: 700;
-}
+
 .clue-text .rm,
 .clue-text .tm {
   color: var(--ink);
@@ -799,7 +802,6 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
   font-weight: 700;
   font-size: 0.85rem;
 }
@@ -822,11 +824,13 @@ li.discarded .discard-btn .name {
 /* =====================================================================
    Hoja de acusación (§14.3).
    ===================================================================== */
+/* Velo oscuro fijo: con var(--ink) aclaraba en vez de oscurecer en tema oscuro y en
+   fuego, donde la tinta es clara. */
 .accuse-overlay {
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: color-mix(in srgb, var(--ink) 45%, transparent);
+  background: rgba(6, 12, 18, 0.55);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -878,6 +882,21 @@ li.discarded .discard-btn .name {
   margin-top: 14px;
   width: 100%;
   justify-content: center;
+}
+/* Móvil: hoja inferior, al alcance del pulgar. Tableta y escritorio: diálogo centrado
+   (antes salía pegado al pie de la pantalla también en el ordenador). */
+@media (min-width: 700px) {
+  .accuse-overlay {
+    align-items: center;
+    padding: 24px;
+  }
+  .accuse-sheet {
+    max-height: min(85dvh, 760px);
+    border-radius: 8px;
+    border-bottom: 2px solid var(--wall);
+    padding-bottom: 18px;
+    box-shadow: 0 18px 50px -20px rgba(0, 0, 0, 0.6);
+  }
 }
 /* "¿Te quedan dos?" (MODOS 3.10.1): protocolo plegado bajo el botón de acusar. */
 .two-left {
@@ -1113,6 +1132,21 @@ li.discarded .discard-btn .name {
   display: none;
 }
 
+/* Móvil y tableta: la guía flota abajo y el tablero (y el plano ampliado) se encogen
+   lo que ella mide (--coach-h lo pone ui/tutorial.ts), para no tapar nada. */
+@media (max-width: 1099px) {
+  body.tut-on .game {
+    height: calc(100dvh - var(--coach-h, 0px));
+  }
+  body.tut-on .plan-overlay {
+    bottom: var(--coach-h, 0px);
+  }
+  body.tut-on .game[data-sheet='desplegada'] .sheet-panel {
+    bottom: var(--coach-h, 0px);
+    height: auto;
+  }
+}
+
 @media (min-width: 1100px) {
   .coach:not(.dock) {
     left: auto;
@@ -1209,7 +1243,8 @@ li.discarded .discard-btn .name {
    abrir el panel". Arreglo de raíz: .game-main gana su propio techo y
    scroll interno, para que .sheet-panel SIEMPRE se quede con una porción de
    alto real, sea cual sea el contenido de arriba. */
-@media (max-width: 699px) {
+/* Una columna: el complemento exacto de la rejilla de arriba por debajo de 700 px. */
+@media (max-width: 599px), (max-width: 699px) and (min-height: 560px) {
   .game-main {
     overflow-y: auto;
     max-height: 52dvh;
@@ -1222,7 +1257,7 @@ li.discarded .discard-btn .name {
    de arriba como en la rejilla de tableta (§17.3, 700-1099px de ancho, que
    ya reparte Pistas/Objetos/Caso en su propia columna y no sufre el mismo
    aplastamiento porque cada columna tiene su propia fila de la rejilla). */
-@media (max-width: 699px) and (max-height: 500px) {
+@media (max-width: 599px) and (max-height: 500px) {
   .plan-wrap .plan {
     max-height: 20dvh;
   }
@@ -1231,7 +1266,7 @@ li.discarded .discard-btn .name {
    arriba dejaba el plano en 20dvh (78 px de alto, salas de 9 a 17 px) aunque la columna
    izquierda tiene todo el alto. El plano se lleva lo que queda tras la barra, el informe
    y las horas, y las horas siguen a la vista. */
-@media (min-width: 700px) and (max-height: 559px) {
+@media (min-width: 600px) and (max-height: 559px) {
   .plan-wrap .plan {
     max-height: calc(100dvh - 200px);
   }

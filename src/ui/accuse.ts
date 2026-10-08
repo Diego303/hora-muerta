@@ -91,6 +91,10 @@ export function openAccuseSheet(ctx: ClueTextContext, store: GameStore, options:
   }
   document.addEventListener('keydown', onKey);
   overlay.querySelector('.accuse-close')?.addEventListener('click', close);
+  // Tocar el velo, fuera de la hoja, también la cierra.
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) close();
+  });
   overlay.querySelector<HTMLButtonElement>('[data-sus]')?.focus();
   overlay.querySelector('#practiceRemates')?.addEventListener('click', () => {
     close();
