@@ -50,6 +50,11 @@ export function attachFireHud(
   // añadir una celda a la rejilla de la mesa de trabajo en tableta y escritorio).
   const bar = root.querySelector<HTMLElement>('.gbar');
   bar?.classList.add('fire-gbar');
+  game.classList.add('fire-game');
+  // Las estrellas del tablero no cuentan aquí (el incendio da las suyas al resolver),
+  // y en el móvil su hueco hace falta para el reloj.
+  const stars = root.querySelector<HTMLElement>('#starsDisplay');
+  if (stars) stars.hidden = true;
   const clock = document.createElement('span');
   clock.className = 'fire-clock';
   clock.id = 'fireClock';
@@ -182,7 +187,13 @@ export function attachFireHud(
       announce('Queda 1 minuto.');
     }
     if (run.collapsed() && !play.collapsed && !play.solved) showCollapse();
-    pause.hidden = !(run.paused() && !play.collapsed && !play.solved);
+    const paused = run.paused() && !play.collapsed && !play.solved;
+    // Al aparecer la pausa, el foco va a "Seguir" (con teclado o lector de pantalla).
+    if (paused && pause.hidden) {
+      pause.hidden = false;
+      pause.querySelector<HTMLButtonElement>('#firePauseGo')?.focus();
+    }
+    pause.hidden = !paused;
   }
 
   const onVisibility = (): void => {
@@ -202,6 +213,8 @@ export function attachFireHud(
       stopEmbers();
       closeNight?.();
       bar?.classList.remove('fire-gbar');
+      game.classList.remove('fire-game');
+      if (stars) stars.hidden = false;
       clock.remove();
       building.remove();
       status.remove();

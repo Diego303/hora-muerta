@@ -235,9 +235,14 @@
   border: 2px solid var(--ink);
   padding: 18px;
 }
+/* A 360 px cada píxel de ancho es plano: con menos margen, la sala más estrecha de
+   los planos reales (2 unidades) pasa de 42 a 46 px y se toca con el pulgar. */
 @media (max-width: 420px) {
+  .wrap.gym {
+    padding: 0 12px;
+  }
   .gcard {
-    padding: 14px 12px;
+    padding: 12px 10px;
   }
 }
 .gk {
@@ -268,6 +273,21 @@
 .g-lay {
   display: grid;
   gap: 16px;
+}
+/* Móvil en horizontal: plano a la izquierda con todo el alto; si no, a 844 × 390 el
+   plano se quedaba en 156 px de alto y las salas en 30 px. */
+@media (min-width: 640px) and (max-height: 500px) {
+  .g-lay.has-plan {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+  .g-plan svg {
+    max-height: calc(100dvh - 80px);
+  }
+  .g-lay.has-plan .g-plan {
+    position: sticky;
+    top: 70px;
+  }
 }
 @media (min-width: 900px) {
   .g-lay.has-plan {
@@ -457,6 +477,20 @@
 }
 .g-fb .btn {
   margin-top: 4px;
+}
+
+/* En el móvil, "Comprobar" y "Siguiente" se quedan pegados abajo, al alcance del
+   pulgar, aunque el ejercicio o la explicación ocupen más de una pantalla. */
+@media (max-width: 899px) {
+  .g-check,
+  .g-fb #gNext {
+    position: sticky;
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    z-index: 2;
+    width: 100%;
+    justify-content: center;
+    box-shadow: 0 0 0 8px var(--panel);
+  }
 }
 
 /* ---------- pantallas entre bloques e informe ---------- */

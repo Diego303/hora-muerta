@@ -92,6 +92,34 @@ function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+/** Tamaño del nombre de sala en unidades del plano: en un móvil de 360 px el plano se
+ * pinta a ~0,6, así que 16 se ven como ~10 px. */
+const LABEL_SIZE = 16;
+const LABEL_MIN = 11;
+/** Ancho medio de un carácter, en ems, de la fuente del cuerpo en negrita. */
+const CHAR_EM = 0.58;
+
+/** Nombre de la sala dentro de su caja: en una línea si cabe; si no, en dos (por el
+ * espacio que mejor reparte) si la sala es alta; y si aún no cabe, más pequeño. */
+function labelMarkup(name: string, q: { x: number; y: number; w: number; h: number }): string {
+  const room = q.w - 14;
+  const width = (text: string, size: number): number => text.length * CHAR_EM * size;
+  let lines = [name];
+  if (width(name, LABEL_SIZE) > room && q.h >= 100 && name.includes(' ')) {
+    const words = name.split(' ');
+    let best = lines;
+    for (let i = 1; i < words.length; i++) {
+      const pair = [words.slice(0, i).join(' '), words.slice(i).join(' ')];
+      if (best.length === 1 || Math.max(...pair.map((l) => l.length)) < Math.max(...best.map((l) => l.length))) best = pair;
+    }
+    lines = best;
+  }
+  const longest = Math.max(...lines.map((l) => l.length));
+  const size = Math.max(LABEL_MIN, Math.min(LABEL_SIZE, room / (longest * CHAR_EM)));
+  const tspans = lines.map((l, i) => `<tspan x="${q.x + 7}" dy="${i === 0 ? 0 : size * 1.1}">${esc(l)}</tspan>`).join('');
+  return `<text class="pl-label" x="${q.x + 7}" y="${q.y + 6 + size}" font-size="${size.toFixed(1)}" aria-hidden="true">${tspans}</text>`;
+}
+
 /** Marcado del miniplano, sin tocar el DOM. */
 export function planLiteMarkup(map: FloorPlan, options: PlanLiteOptions = {}): string {
   const selected = new Set(options.selected ?? []);
@@ -144,10 +172,10 @@ export function planLiteMarkup(map: FloorPlan, options: PlanLiteOptions = {}): s
   if (options.labels) {
     map.rooms.forEach((room, r) => {
       const q = rectOf(map, r);
-      out += `<text class="pl-label" x="${q.x + 8}" y="${q.y + 18}" aria-hidden="true">${esc(room.name)}</text>`;
+      out += labelMarkup(room.name, q);
       room.f.forEach((fid, k) => {
         const feature = map.features.find((f) => f.id === fid);
-        if (feature) out += `<use class="pl-ficon" href="#ic-${feature.icon}" x="${q.x + 7 + k * 19}" y="${q.y + q.h - 21}" width="15" height="15"><title>${esc(feature.label)}</title></use>`;
+        if (feature) out += `<use class="pl-ficon" href="#ic-${feature.icon}" x="${q.x + 7 + k * 22}" y="${q.y + q.h - 25}" width="18" height="18"><title>${esc(feature.label)}</title></use>`;
       });
     });
   }
@@ -164,12 +192,12 @@ export function planLiteMarkup(map: FloorPlan, options: PlanLiteOptions = {}): s
     perRoom.set(t.r, i + 1);
     const total = tokens.filter((x) => x.r === t.r).length;
     const c = centerOf(map, t.r);
-    const dx = (i - (total - 1) / 2) * (t.caption ? 38 : 20);
+    const dx = (i - (total - 1) / 2) * (t.caption ? 44 : 28);
     const cy = t.caption ? c.y - 4 : c.y;
     const color = t.color ?? CHIP_COLORS[t.c % CHIP_COLORS.length];
-    out += `<g class="pl-token${t.dashed ? ' dashed' : ''}"><circle cx="${c.x + dx}" cy="${cy}" r="${t.caption ? 11 : 9}" fill="${color}" stroke="${t.dashed ? 'currentColor' : '#fff'}" stroke-width="${t.dashed ? 2.4 : 1.6}"${t.dashed ? ' stroke-dasharray="4 3"' : ''}/>`;
-    out += `<text x="${c.x + dx}" y="${cy + 4}" text-anchor="middle" class="pl-token-label">${esc(t.label ?? String(t.c + 1))}</text>`;
-    if (t.caption) out += `<text x="${c.x + dx}" y="${cy + 24}" text-anchor="middle" class="pl-token-caption">${esc(t.caption)}</text>`;
+    out += `<g class="pl-token${t.dashed ? ' dashed' : ''}"><circle cx="${c.x + dx}" cy="${cy}" r="${t.caption ? 13 : 12}" fill="${color}" stroke="${t.dashed ? 'currentColor' : '#fff'}" stroke-width="${t.dashed ? 2.4 : 1.6}"${t.dashed ? ' stroke-dasharray="4 3"' : ''}/>`;
+    out += `<text x="${c.x + dx}" y="${cy + 4.5}" text-anchor="middle" class="pl-token-label">${esc(t.label ?? String(t.c + 1))}</text>`;
+    if (t.caption) out += `<text x="${c.x + dx}" y="${cy + 29}" text-anchor="middle" class="pl-token-caption">${esc(t.caption)}</text>`;
     out += '</g>';
   }
 
@@ -179,7 +207,7 @@ export function planLiteMarkup(map: FloorPlan, options: PlanLiteOptions = {}): s
     out += `<path class="pl-path" d="M${pts.map((p) => `${p.x},${p.y}`).join('L')}" fill="none"/>`;
     for (let i = 0; i < path.length - 1; i++) {
       const d = doorOf(map, path[i], path[i + 1]);
-      out += `<g class="pl-door" aria-hidden="true"><circle class="pl-door-dot" cx="${d.x}" cy="${d.y}" r="7"/><text x="${d.x}" y="${d.y + 3.5}" text-anchor="middle">${i + 1}</text></g>`;
+      out += `<g class="pl-door" aria-hidden="true"><circle class="pl-door-dot" cx="${d.x}" cy="${d.y}" r="10"/><text x="${d.x}" y="${d.y + 4.5}" text-anchor="middle">${i + 1}</text></g>`;
     }
   }
 

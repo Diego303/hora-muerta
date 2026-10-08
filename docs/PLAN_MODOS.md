@@ -198,11 +198,11 @@ Cada fase se cierra con `pnpm typecheck`, `pnpm lint`, `pnpm test` (y `pnpm test
 - **Puede empezar ya:** M2 está cerrado. Es independiente de F1 a F5.
 
 ### F7 · Calidad
-- [ ] e2e de ambos modos en 360×640, 390×844, 844×390 y 1280×800, en tema claro y oscuro (el incendio siempre con su paleta). Los ejecutas tú.
-- [ ] Auditoría de accesibilidad: teclado, `role`, contraste y movimiento reducido.
-- [ ] Rendimiento con la CPU limitada ×4 (prueba manual tuya).
-- [ ] Revisión de todos los textos frente a MODOS.
-- [ ] Lista final de lo que queda fuera.
+- [x] e2e de ambos modos en 360×640, 390×844, 844×390 y 1280×800, en tema claro y oscuro (el incendio siempre con su paleta). Los ejecutas tú.
+- [x] Auditoría de accesibilidad: teclado, `role`, contraste y movimiento reducido.
+- [ ] Rendimiento con la CPU limitada ×4 (prueba manual tuya). Revisado en el código: ver DECISIONES, F7.
+- [x] Revisión de todos los textos frente a MODOS.
+- [x] Lista final de lo que queda fuera.
 
 ---
 

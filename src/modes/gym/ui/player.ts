@@ -148,7 +148,7 @@ export function runSession(root: HTMLElement, plan: SessionPlan, actions: Player
       answerZone = `<div class="g-opts">${opts.map(([v, l]) => `<button class="btn ghost" type="button" data-v="${v}">${l}</button>`).join('')}<button class="btn ghost" type="button" data-v="NS">No se puede saber</button></div>`;
     }
 
-    root.innerHTML = `<div class="wrap gym gym-play">${header(`${BLOCK_NAMES[item.block]}. Ejercicio ${index + 1} de ${items.length}`)}
+    root.innerHTML = `<div class="wrap gym gym-play">${header(`Ejercicio ${index + 1} de ${items.length} · ${BLOCK_NAMES[item.block]}`)}
       <article class="gcard">
         <p class="gk">${TECHS[drill.tech].name}${item.review ? ' <span class="g-review">· repaso</span>' : ''}</p>
         ${drill.context ? `<p class="gctx">${drill.context}</p>` : ''}

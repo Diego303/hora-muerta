@@ -41,9 +41,9 @@ export function openAccuseSheet(ctx: ClueTextContext, store: GameStore, options:
   const objOptions = ctx.objects.map((o, i) => `<button class="chip accsel" data-obj="${i}" aria-pressed="false">${o.label}</button>`).join('');
 
   overlay.innerHTML = `
-    <div class="accuse-sheet">
+    <div class="accuse-sheet" role="dialog" aria-modal="true" aria-labelledby="accuseT">
       <button class="icon-btn accuse-close" aria-label="Cerrar">✕</button>
-      <h2>Acusación</h2>
+      <h2 id="accuseT">Acusación</h2>
       <p class="errs">${options.errorsLabel}</p>
       <p class="lbl">¿Quién fue?</p>
       <div class="accuse-row">${susOptions}</div>
@@ -53,6 +53,8 @@ export function openAccuseSheet(ctx: ClueTextContext, store: GameStore, options:
       ${twoLeft ? twoLeftMarkup(Boolean(options.onPracticeRemates)) : ''}
     </div>
   `;
+  // Al cerrar, el foco vuelve a donde estaba (el botón Acusar).
+  const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   document.body.appendChild(overlay);
 
   let selSus: number | null = null;
@@ -77,10 +79,19 @@ export function openAccuseSheet(ctx: ClueTextContext, store: GameStore, options:
     });
   });
 
-  function close(): void {
-    overlay.remove();
+  function onKey(e: KeyboardEvent): void {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    close();
   }
+  function close(): void {
+    document.removeEventListener('keydown', onKey);
+    overlay.remove();
+    if (previous?.isConnected) previous.focus();
+  }
+  document.addEventListener('keydown', onKey);
   overlay.querySelector('.accuse-close')?.addEventListener('click', close);
+  overlay.querySelector<HTMLButtonElement>('[data-sus]')?.focus();
   overlay.querySelector('#practiceRemates')?.addEventListener('click', () => {
     close();
     options.onPracticeRemates?.();

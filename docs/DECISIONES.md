@@ -395,6 +395,25 @@ Se pidió el contrato completo de MODOS 1.1 y una prueba que compruebe que al vo
 - **Tamaño de las sesiones:** con el banco generado ya salen los de MODOS: el diagnóstico de la primera vez trae 8 + 5 + 3 = 16 ejercicios y "Practicar remates", 5. El e2e lee el total de la pantalla.
 - **Formato (`public/drills.json`, MODOS 3.7):** índices al reparto global, a `OBJECTS` y a las salas del plano; la respuesta en la forma normalizada (`Answer`) y un campo `src` con el caso y el paso de origen para revisar. La app lo pide al entrar en la Academia; si no llega, usa los 23 del prototipo. Los del prototipo van siempre primero en el banco.
 
+## Modos: F7 (calidad y revisión de móvil)
+
+- **Sin navegador en este entorno.** La revisión de móvil se hizo leyendo el CSS y el marcado y calculando las medidas (alto disponible, escala de los planos, tamaño real de los textos SVG). Los e2e se escriben y los ejecuta el usuario.
+- **Incendio en el móvil (MODOS 2.10.4):** a 390 × 844 la línea de estado quedaba escondida en el scroll interno de la columna superior (informe 90 + plano 285 + horas 56 + estado 45 = 476 px en un hueco de 439). En el incendio, en móvil y en horizontal se quita el informe del caso de encima del plano (la víctima ya está dibujada en él y el texto sigue en la pestaña Caso), la columna superior pasa a 57dvh y el plano a un máximo de 38dvh. Así caben el plano, las horas y el estado también a 360 × 640. Las estrellas del tablero se ocultan en el incendio: no cuentan allí y su hueco hace falta para el reloj.
+- **Plano en horizontal (también en la partida normal):** la regla de pantallas bajas dejaba el plano en 20dvh incluso en la rejilla de dos columnas. A 844 × 390 eso eran 78 px de alto y salas de 9 a 17 px. Ahora esa regla solo vale en una columna, y en la rejilla el plano se lleva `100dvh − 200px`, con las horas a la vista.
+- **Capas del incendio que no cabían:** la pausa, el derrumbe (con la solución desplegada) y la confirmación de salida se centraban con flex y, si no cabían, se cortaban por arriba sin poder desplazarse. Ahora la capa se desplaza y la tarjeta se centra con `margin: auto`.
+- **Miniplano (`ui/planlite.ts`):** sus textos están en unidades del plano (496 de ancho), que a 360 px se ven a ~0,6. Los nombres de sala (12) quedaban en 7 px, el pie de las fichas en 6 px y los números de puerta en 5 px, y los nombres largos se salían de su sala. Ahora el nombre de sala va a 16 (~10 px) y se parte en dos líneas o se reduce para caber; las fichas, sus pies y los números de puerta suben a 13, y los iconos de rasgo a 18. "En llamas" sobre el plano del incendio pasa de 10 a 14.
+- **Calentamiento:**
+  - A 360 px, menos margen lateral (12 px) para que la sala más estrecha de los planos reales pase de 42 a 46 px.
+  - En móvil en horizontal, plano a la izquierda con todo el alto (las salas pasan de 30 a ~60 px).
+  - "Comprobar" y "Siguiente" se quedan pegados abajo, al alcance del pulgar, aunque el ejercicio ocupe más de una pantalla.
+  - La barra dice "Ejercicio 12 de 16 · Técnica del día": si no cabe, se corta el nombre del bloque y no el número.
+- **Accesibilidad:**
+  - La hoja de acusación pasa a ser un diálogo (`role="dialog"`, `aria-modal`, título). El foco va al primer sospechoso, Escape la cierra y el foco vuelve a Acusar.
+  - Al aparecer "En pausa", el foco va a "Seguir".
+  - Contraste: todos los pares de texto cumplen AA en claro, oscuro y fuego. En tema claro, el ámbar (3,2:1) solo se usa en bordes decorativos.
+  - Movimiento reducido: llamas, humo, latido del reloj, transición de entrada y chispas (no arrancan).
+- **e2e:** cuatro tamaños (se añade 360 × 640) en tema claro para todo, y los cuatro en oscuro para los modos nuevos. Además, `tests/e2e/modes-layout.spec.ts` fija lo corregido: plano, horas y estado a la vez; objetivos de 44 px; paleta de fuego con el tema oscuro; derrumbe desplazable; diálogo de acusación; "Comprobar" a la vista; sin scroll horizontal.
+
 ## Contenido y diseño
 
 - **Corrección de ruta bajo `base: "/hora-muerta/"`.** `Layout.astro` (heredado de la plantilla de Astro) enlazaba `/favicon.svg` y `/favicon.ico` con ruta absoluta; bajo GitHub Pages con `base: "/hora-muerta/"` esos enlaces romperían. Se corrige usando `import.meta.env.BASE_URL` en ambos `<link>`.

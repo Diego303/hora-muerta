@@ -251,15 +251,15 @@ svg {
 .pl-door text {
   font-family: var(--display);
   font-weight: 800;
-  font-size: 9px;
+  font-size: 13px;
   fill: var(--ink);
 }
 .pl-door-gap {
   fill: var(--room);
 }
+/* El tamaño lo pone ui/planlite.ts sala a sala (atributo font-size) para que el nombre quepa. */
 .pl-label {
   font-family: var(--body);
-  font-size: 12px;
   font-weight: 700;
   fill: var(--ink-2);
 }
@@ -268,7 +268,7 @@ svg {
 }
 .pl-token-caption {
   font-family: var(--body);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 700;
   fill: var(--ink);
   paint-order: stroke;
@@ -277,7 +277,7 @@ svg {
 }
 .pl-token-label {
   font-family: var(--body);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 700;
   fill: #15222c;
   pointer-events: none;
