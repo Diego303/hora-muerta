@@ -11,45 +11,35 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MAPS } from '../src/engine/content/maps';
 import type { CaseDraft } from '../src/engine/generate';
-import { buildCaseCandidate, draftToCaseDef } from '../src/engine/generate';
 import { fnv1a } from '../src/engine/rng';
-import type { CaseDef, CaseMode, MapId } from '../src/engine/types';
-import { BANK_GROUPS, BANK_VERSION } from './bank.config';
+import type { CaseDef } from '../src/engine/types';
+import { BANK_GROUPS, BANK_VERSION, type BankGroupConfig } from './bank.config';
+import { MAX_RETRIES_PER_SLOT, slotCandidate, slotMap, toCaseDef } from './bank-group';
 import { buildFireReport, generateFireGroup } from './fire-bank';
 import { createSlotRunner } from './fire-parallel';
 
 const OUT_DIR = path.join(process.cwd(), 'public', 'cases');
-const MAP_IDS: MapId[] = MAPS.map((m) => m.id);
-const MAX_RETRIES_PER_SLOT = 6;
 
-function padId(prefix: string, index: number, width = 3): string {
-  return `${prefix}-${String(index + 1).padStart(width, '0')}`;
-}
-
-/** Exportada para poder regenerar un único grupo (p. ej. tras arreglar un bug
- * del generador que solo afecta a un nivel) sin tener que relanzar el banco
- * entero; ver docs/DECISIONES.md. */
-export function generateGroup(mode: CaseMode, diff: 0 | 1 | 2, count: number, idPrefix: string, seenSignatures: Set<string>): CaseDef[] {
+/** Genera un grupo en serie: en cada hueco, el primer intento que da un caso nuevo.
+ * Para un solo grupo en paralelo, ver build-group.ts (mismo resultado, más rápido). */
+export function generateGroup(group: BankGroupConfig, seenSignatures: Set<string>): CaseDef[] {
   const cases: CaseDef[] = [];
-  for (let slot = 0; slot < count; slot++) {
-    const mapId = MAP_IDS[slot % MAP_IDS.length];
+  for (let slot = 0; slot < group.count; slot++) {
     let draft: CaseDraft | null = null;
     for (let retry = 0; retry < MAX_RETRIES_PER_SLOT; retry++) {
-      const seed = `${BANK_VERSION}|${mode}|${slot}|${retry}`;
-      const attempt = buildCaseCandidate(seed, diff, mapId);
+      const attempt = slotCandidate(group, slot, retry);
       if (attempt && !seenSignatures.has(attempt.sig)) {
         draft = attempt;
         break;
       }
     }
     if (!draft) {
-      console.warn(`[build-bank] no se pudo generar ${mode} #${slot + 1} (mapa ${mapId}) tras ${MAX_RETRIES_PER_SLOT} intentos.`);
+      console.warn(`[build-bank] no se pudo generar ${group.mode} #${slot + 1} (mapa ${slotMap(slot)}) tras ${MAX_RETRIES_PER_SLOT} intentos.`);
       continue;
     }
     seenSignatures.add(draft.sig);
-    cases.push(draftToCaseDef(draft, padId(idPrefix, cases.length), mode));
+    cases.push(toCaseDef(group, draft, cases.length));
   }
   return cases;
 }
@@ -62,7 +52,7 @@ async function main(): Promise<void> {
   const manifestFiles: Record<string, { count: number; hash: string }> = {};
 
   for (const group of BANK_GROUPS) {
-    const cases = generateGroup(group.mode, group.diff, group.count, group.idPrefix, seenSignatures);
+    const cases = generateGroup(group, seenSignatures);
     const fileName = `${group.mode}.json`;
     const contents = JSON.stringify({ version: BANK_VERSION, mode: group.mode, cases });
     writeFileSync(path.join(OUT_DIR, fileName), contents);

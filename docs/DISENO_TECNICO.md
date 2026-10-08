@@ -509,6 +509,8 @@ Los arquetipos se usan para: la frase de la deducción clave, el archivo de arqu
 
 La composición es configurable en `scripts/bank.config.ts`. El mínimo razonable es 200 (70 / 70 / 40 / 20).
 
+**Publicado ahora:** Novato 170, Inspector 164, Comisario 5 y Diario 55. Comisario se genera aparte, en paralelo, con `pnpm bank:group comisario <n>`, y con su tope de 14 pistas estricto.
+
 **Cuotas de variedad dentro de cada grupo:**
 
 - Escenarios: reparto uniforme entre los 6 mapas (±2 casos).

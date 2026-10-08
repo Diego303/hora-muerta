@@ -8,6 +8,9 @@ export interface BankGroupConfig {
   diff: DiffIndex;
   count: number;
   idPrefix: string;
+  /** Tope estricto de pistas. Sin él, el generador tolera pasarse del de la
+   * dificultad a partir del tercer intento (src/engine/generate.ts). */
+  maxClues?: number;
 }
 
 /** `manifest.json.version`: cambia cuando el banco generado deja de ser compatible con el anterior (§12.6). */
@@ -15,11 +18,13 @@ export const BANK_VERSION = '2026.09-a';
 
 /** Composición por defecto (540 casos): 170 + 190 + 120 + 60 (§12.1).
  * Comisario necesita R6_HYPOTHESIS (implementada en `src/engine/human.ts`, ver
- * docs/DECISIONES.md) y cada hueco es mucho más caro que uno de Inspector. */
+ * docs/DECISIONES.md) y cada hueco es mucho más caro que uno de Inspector: para
+ * generar solo ese grupo, en paralelo, está `pnpm bank:group` (scripts/build-group.ts).
+ * Comisario lleva su tope de 14 pistas estricto (§11: de 10 a 14). */
 export const BANK_GROUPS: BankGroupConfig[] = [
   { mode: 'novato', diff: 0, count: 170, idPrefix: 'N' },
   { mode: 'inspector', diff: 1, count: 190, idPrefix: 'I' },
-  { mode: 'comisario', diff: 2, count: 120, idPrefix: 'C' },
+  { mode: 'comisario', diff: 2, count: 120, idPrefix: 'C', maxClues: 14 },
   // El caso del día usa el nivel Inspector (§13).
   { mode: 'diario', diff: 1, count: 60, idPrefix: 'D' },
 ];

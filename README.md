@@ -30,6 +30,7 @@ Por defecto queda escuchando en `http://localhost:4321/hora-muerta/` (el proyect
 | `pnpm test` | Pruebas unitarias/integración con Vitest (motor, juego, banco). |
 | `pnpm test:e2e` | Pruebas end-to-end con Playwright (necesita `pnpm exec playwright install` la primera vez). |
 | `pnpm bank:build` | Genera el banco de casos (`public/cases/*.json`) a partir de `scripts/bank.config.ts`. |
+| `pnpm bank:group <modo> <cantidad>` | Genera un solo grupo (p. ej. `comisario 5`) en paralelo, sin tocar el resto del banco. `--simulacro` no escribe nada; `BANK_JOBS=n` fija los núcleos. |
 | `pnpm bank:validate` | Verifica que el banco generado pasa el solver exacto y el humano. |
 | `pnpm bank:report` | Imprime un resumen del banco (recuentos por nivel, arquetipos, etc.). |
 
@@ -40,7 +41,8 @@ Antes de dar algo por terminado conviene pasar `pnpm typecheck && pnpm lint && p
 El juego lee los casos ya generados desde `public/cases/*.json` (no genera nada en el navegador salvo en el modo infinito). Para regenerarlos:
 
 ```bash
-pnpm bank:build      # genera novato/inspector/comisario/diario según scripts/bank.config.ts
+pnpm bank:build      # genera novato/inspector/comisario/diario según scripts/bank.config.ts (en serie, tarda)
+pnpm bank:group comisario 5   # regenera solo un grupo, repartido entre los núcleos
 pnpm bank:validate    # comprueba unicidad y coherencia de lo generado
 pnpm bank:report      # resumen legible del contenido del banco
 ```

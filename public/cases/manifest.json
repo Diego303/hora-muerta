@@ -3,7 +3,7 @@
   "counts": {
     "novato": 170,
     "inspector": 164,
-    "comisario": 0,
+    "comisario": 5,
     "diario": 55,
     "incendio": 40
   },
@@ -17,8 +17,8 @@
       "hash": "bweus2"
     },
     "comisario.json": {
-      "count": 0,
-      "hash": "17eznqy"
+      "count": 5,
+      "hash": "naiz2u"
     },
     "diario.json": {
       "count": 55,

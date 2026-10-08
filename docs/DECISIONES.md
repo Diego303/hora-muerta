@@ -432,6 +432,25 @@ Se pidió el contrato completo de MODOS 1.1 y una prueba que compruebe que al vo
   - "Copiar enlace a este caso" solo aparece para ids que `#caso=` sabe abrir (N, I, C, D).
 - **Historia:** las entradas anteriores de este documento, `PLAN.md` y `PLAN_MODOS.md` que hablan del expediente se dejan como estaban: son historia de lo que se hizo. Las referencias de `docs/referencia/` no se tocan.
 
+## Comisario: 5 casos
+
+- **Decisión del usuario:** publicar 5 casos de Comisario, que estaba vacío. No se relanza `bank:build`: reescribiría todo el banco y cambiaría lo que ya se ha jugado.
+- **`pnpm bank:group <modo> <cantidad>` (`scripts/build-group.ts`):** genera un solo grupo y no toca nada más.
+  - Evita las firmas de todos los casos publicados (`scripts/bank-files.ts`, compartido con el incendio) y actualiza solo su entrada del manifiesto.
+  - Reparte el trabajo entre los núcleos: un proceso por intento (`scripts/parallel.ts`, del que ahora también tira el incendio), `BANK_JOBS` para fijarlos.
+  - `--simulacro` genera sin escribir. Si no llega a la cantidad pedida, no escribe nada.
+- **Mismo resultado en serie y en paralelo:** las semillas, el mapa de cada hueco y los intentos están en `scripts/bank-group.ts`, que usan los dos caminos (`build-bank.ts` también). Los huecos van por tandas: dentro de una tanda todos sus intentos corren a la vez y luego se elige en orden, hueco a hueco, el primer intento con un caso nuevo. Comprobado con Novato: en serie, en paralelo y lo publicado dan los mismos casos.
+- **Diferencia con `bank:build`:** si un hueco agota sus 6 intentos se pasa al siguiente hasta tener la cantidad pedida, con un tope de 12 huecos por caso.
+- **Tope de pistas estricto (§11: de 10 a 14):** el generador tolera pasarse del máximo de la dificultad a partir del tercer intento, y una muestra de Comisario salió con 19 pistas.
+  - El grupo Comisario lleva `maxClues: 14` en `bank.config.ts`; usa la opción que ya existía para el incendio, sin tocar el motor.
+  - `bank:validate` lo comprueba para los grupos que lo tienen.
+- **Coste real:** 20 huecos, 120 intentos, 20,5 minutos con 15 procesos (unos 2 minutos de CPU por intento). Dan caso 5 de 20 huecos, menos que el 15 % por semilla medido sin el tope.
+- **Resultado:** C-001 a C-005, todos de nivel 6 (hipótesis, arquetipo "callejón sin salida"), con 10 a 14 pistas.
+  - Escenarios: dos en el tren y uno en el museo (abiertos desde el principio), uno en el hotel (30 estrellas) y uno en el teatro (150).
+  - Mansión y barco no salen porque sus huecos no dieron caso.
+  - Quien empieza puede jugar 3, y la pantalla de agotado le dice que quedan 2 en escenarios bloqueados.
+- **Validación:** `bank:validate`, 434 casos correctos. Pruebas: `tests/bank/comisario.test.ts` y `tests/bank/group.test.ts`, más el e2e `tests/e2e/comisario.spec.ts`.
+
 ## Contenido y diseño
 
 - **Corrección de ruta bajo `base: "/hora-muerta/"`.** `Layout.astro` (heredado de la plantilla de Astro) enlazaba `/favicon.svg` y `/favicon.ico` con ruta absoluta; bajo GitHub Pages con `base: "/hora-muerta/"` esos enlaces romperían. Se corrige usando `import.meta.env.BASE_URL` en ambos `<link>`.

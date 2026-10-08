@@ -114,6 +114,8 @@ function main(): void {
     const bank = readJSON<BankFile>(`${group.mode}.json`);
     for (const c of bank.cases) {
       validateCase(c, errors);
+      // Tope estricto del grupo (Comisario: 14 pistas, §11).
+      if (group.maxClues !== undefined && c.clues.length > group.maxClues) errors.push(`${c.id}: ${c.clues.length} pistas (máximo ${group.maxClues})`);
       allCases.push(c);
       const owner = signatures.get(c.sig);
       if (owner) errors.push(`${c.id}: firma repetida con ${owner}`);
