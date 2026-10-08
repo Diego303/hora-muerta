@@ -19,7 +19,7 @@ describe('banco de ejercicios del prototipo', () => {
       t1a: 2, t1b: 1, t1c: 2, t1d: 2, t1e: 1,
       t2a: 2, t2b: 1, t2c: 2, t2d: 2, t2e: 2,
       t3a: 2, t3b: 3, t3c: 3, t3d: 1, t3e: 3,
-      r1: 3, r2: 3, r3: 3,
+      r1: 1, r2: 3, r3: 2,
     });
   });
 

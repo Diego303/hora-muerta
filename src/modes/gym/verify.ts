@@ -6,7 +6,7 @@
 // de los objetos se comprueban antes de probar repartos de objetos.
 import { holds } from '../../engine/clues';
 import { buildGraph } from '../../engine/graph';
-import type { Clue, Graph, Room, Truth } from '../../engine/types';
+import type { Clue, Graph, Room, Sus, Truth } from '../../engine/types';
 import type { Answer, Drill, Statement, Tri } from './types';
 
 const OBJECT_KINDS = new Set(['cat', 'cfeat', 'ncarry', 'cwith', 'carry']);
@@ -52,8 +52,18 @@ function permutations(n: number): number[][] {
   return out;
 }
 
-/** Todos los escenarios que cumplen `statements` (y `extra` sobre las salas, si se da). */
-export function scenarios(drill: Drill, statements: readonly Statement[], extra?: (rooms: Room[][]) => boolean): Truth[] {
+/** Enumerador: todos los escenarios que cumplen `statements` o, para las personas que no
+ * influyen en la pregunta, un representante de cada clase (ver `scenarios`). */
+export type Enumerator = (drill: Drill, statements: readonly Statement[], relevant: readonly Sus[]) => Truth[];
+
+/** Se lanza cuando una enumeración pasa de su presupuesto de pasos (ver `scenarios`). */
+export class BudgetExceeded extends Error {}
+
+/**
+ * Fuerza bruta literal: recorre TODOS los escenarios sin ninguna poda. Solo es viable en
+ * ejercicios muy pequeños; las pruebas la usan como segunda opinión de `scenarios`.
+ */
+export const scenariosLiteral: Enumerator = (drill, statements) => {
   if (drill.nObjs !== 0 && drill.nObjs !== drill.N) throw new Error(`${drill.id}: ${drill.nObjs} objetos para ${drill.N} personas`);
   const graph = buildGraph(drill.plan);
   const allPaths = paths(graph, drill.plan.rooms.length, drill.T);
@@ -70,7 +80,6 @@ export function scenarios(drill: Drill, statements: readonly Statement[], extra?
         const rv = drill.rv;
         if (rooms.filter((p) => p[td] === rv).length !== 1) return;
       }
-      if (extra && !extra(rooms)) return;
       const placed: Truth = { rooms: rooms.slice(), obj: perms[0] };
       if (!roomOnly.every((s) => statementHolds(s, placed, graph))) return;
       for (const obj of perms) {
@@ -86,6 +95,140 @@ export function scenarios(drill: Drill, statements: readonly Statement[], extra?
   };
   assign(0);
   return found;
+};
+
+/** Personas de las que depende un enunciado con este reparto de objetos; null: todas. */
+function personRefs(s: Statement, obj: readonly number[]): Sus[] | null {
+  switch (s.k) {
+    case 'count':
+      return null;
+    case 'together':
+    case 'apart':
+    case 'adj':
+      return [s.a, s.b];
+    case 'cat':
+    case 'cfeat':
+      return [obj.indexOf(s.o)];
+    case 'cwith':
+      return [obj.indexOf(s.o), s.c];
+    case 'ncarry':
+    case 'carry':
+      return [];
+    default:
+      return [s.c];
+  }
+}
+
+/**
+ * Enumeración exhaustiva con poda, equivalente a la literal para lo que se pregunta:
+ * - Con cada reparto de objetos, primero se comprueban las pistas que solo miran objetos.
+ * - Los recorridos de cada persona se filtran antes con las pistas que solo hablan de ella.
+ * - Cada pista que relaciona a varias se comprueba en cuanto están todas asignadas.
+ * - Los recuentos ("exactamente N en S a las H") y la regla del crimen ("una sola
+ *   persona con la víctima") se llevan como contadores: se poda en cuanto se pasan o ya
+ *   no pueden llegar.
+ * - De una persona que no aparece en ninguna pista que la relacione con otras ni en la
+ *   pregunta (`relevant`) basta un recorrido por cada forma distinta de contar en esos
+ *   contadores: el resto no cambia la respuesta.
+ * Así, las salas de las personas de `relevant`, el reparto de objetos y quién estaba con
+ * la víctima salen exactamente igual que enumerando todo.
+ */
+export function scenarios(drill: Drill, statements: readonly Statement[], relevant: readonly Sus[], budget = Number.POSITIVE_INFINITY): Truth[] {
+  let work = 0;
+  if (drill.nObjs !== 0 && drill.nObjs !== drill.N) throw new Error(`${drill.id}: ${drill.nObjs} objetos para ${drill.N} personas`);
+  const N = drill.N;
+  const graph = buildGraph(drill.plan);
+  const allPaths = paths(graph, drill.plan.rooms.length, drill.T);
+  const perms = drill.nObjs === 0 ? [[...Array(N).keys()]] : permutations(drill.nObjs);
+  const counters: { r: Room; t: number; n: number }[] = statements.flatMap((s) => (s.k === 'count' ? [{ r: s.r, t: s.t, n: s.n }] : []));
+  if (drill.rv !== null && drill.td !== null) counters.push({ r: drill.rv, t: drill.td, n: 1 });
+  const inCounter = (p: Room[], j: number): number => (p[counters[j].t] === counters[j].r ? 1 : 0);
+  const found: Truth[] = [];
+
+  for (const obj of perms) {
+    const objOnly: Statement[] = [];
+    const unary: Statement[][] = Array.from({ length: N }, () => []);
+    const checkAt: Statement[][] = Array.from({ length: N }, () => []);
+    const linked = new Set<Sus>(relevant);
+    for (const s of statements) {
+      if (s.k === 'count') continue;
+      const distinct = [...new Set(personRefs(s, obj) ?? [])];
+      if (distinct.length === 0) objOnly.push(s);
+      else if (distinct.length === 1) unary[distinct[0]].push(s);
+      else {
+        checkAt[Math.max(...distinct)].push(s);
+        for (const c of distinct) linked.add(c);
+      }
+    }
+    const probe: Truth = { rooms: new Array<Room[]>(N), obj };
+    if (!objOnly.every((s) => statementHolds(s, probe, graph))) continue;
+
+    const options: Room[][][] = [];
+    for (let c = 0; c < N; c++) {
+      let mine = allPaths.filter((p) => {
+        probe.rooms[c] = p;
+        return unary[c].every((s) => statementHolds(s, probe, graph));
+      });
+      if (!linked.has(c)) {
+        const bySignature = new Map<string, Room[]>();
+        for (const p of mine) {
+          const sig = counters.map((_, j) => inCounter(p, j)).join('');
+          if (!bySignature.has(sig)) bySignature.set(sig, p);
+        }
+        mine = [...bySignature.values()];
+      }
+      options.push(mine);
+    }
+    if (options.some((o) => o.length === 0)) continue;
+
+    const rooms: Room[][] = new Array<Room[]>(N);
+    const truth: Truth = { rooms, obj };
+    const counts = counters.map(() => 0);
+    const assign = (k: number): void => {
+      if (k === N) {
+        if (counters.every((c, j) => counts[j] === c.n)) found.push({ rooms: rooms.slice(), obj });
+        return;
+      }
+      for (const p of options[k]) {
+        if (++work > budget) throw new BudgetExceeded(`${drill.id}: más de ${budget} pasos`);
+        let fits = true;
+        for (let j = 0; j < counters.length; j++) {
+          const now = counts[j] + inCounter(p, j);
+          // Ni pasarse ni quedarse corto con las personas que faltan.
+          if (now > counters[j].n || now + (N - k - 1) < counters[j].n) fits = false;
+        }
+        if (!fits) continue;
+        rooms[k] = p;
+        if (!checkAt[k].every((s) => statementHolds(s, truth, graph))) continue;
+        for (let j = 0; j < counters.length; j++) counts[j] += inCounter(p, j);
+        assign(k + 1);
+        for (let j = 0; j < counters.length; j++) counts[j] -= inCounter(p, j);
+      }
+    };
+    assign(0);
+  }
+  return found;
+}
+
+/** Personas cuyo recorrido decide un enunciado: las suyas, o todas si depende de quién
+ * lleve un objeto o de un recuento. */
+function stmtPersons(s: Statement, N: number): Sus[] {
+  switch (s.k) {
+    case 'carry':
+    case 'ncarry':
+      return [];
+    case 'together':
+    case 'apart':
+    case 'adj':
+      return [s.a, s.b];
+    case 'count':
+    case 'cat':
+    case 'cfeat':
+    case 'cwith':
+      return [...Array(N).keys()];
+    default:
+      return [s.c];
+  }
 }
 
 function unique<T>(values: T[]): T[] {
@@ -93,20 +236,20 @@ function unique<T>(values: T[]): T[] {
 }
 
 /** Respuesta correcta de un ejercicio, calculada desde cero. */
-export function computeAnswer(drill: Drill): Answer {
+export function computeAnswer(drill: Drill, enumerate: Enumerator = scenarios): Answer {
   const base: Clue[] = [...drill.given, ...drill.facts];
   switch (drill.type) {
     case 'reach': {
       const ask = drill.ask;
       if (!ask || ask.c === null || ask.t === null) throw new Error(`${drill.id}: reach sin persona u hora`);
       const { c, t } = ask;
-      return { type: 'reach', rooms: unique(scenarios(drill, base).map((s) => s.rooms[c][t])) };
+      return { type: 'reach', rooms: unique(enumerate(drill, base, [c]).map((s) => s.rooms[c][t])) };
     }
     case 'tri': {
       const stmt = drill.stmt;
       if (!stmt) throw new Error(`${drill.id}: tri sin enunciado`);
       const graph = buildGraph(drill.plan);
-      const values = scenarios(drill, base).map((s) => statementHolds(stmt, s, graph));
+      const values = enumerate(drill, base, stmtPersons(stmt, drill.N)).map((s) => statementHolds(stmt, s, graph));
       if (values.length === 0) throw new Error(`${drill.id}: las pistas no admiten ningún escenario`);
       const value: Tri = values.every(Boolean) ? 'V' : values.some(Boolean) ? 'NS' : 'F';
       return { type: 'tri', value };
@@ -114,7 +257,7 @@ export function computeAnswer(drill: Drill): Answer {
     case 'pick': {
       const ask = drill.ask;
       if (!ask) throw new Error(`${drill.id}: pick sin pregunta`);
-      const sols = scenarios(drill, base);
+      const sols = enumerate(drill, base, []);
       const who = ask.who;
       const what = ask.what;
       const options = who !== null ? unique(sols.map((s) => s.obj.indexOf(who))) : what !== null ? unique(sols.map((s) => s.obj[what])) : [];
@@ -133,11 +276,11 @@ export function computeAnswer(drill: Drill): Answer {
           : what !== null
             ? unique(sols.map((s) => s.obj[what]))
             : [];
-      const all = solved(scenarios(drill, [...base, ...drill.clues]));
+      const all = solved(enumerate(drill, [...base, ...drill.clues], []));
       if (all.length !== 1) throw new Error(`${drill.id}: con todas las pistas la respuesta no es única (${all.join(', ')})`);
       const decisive = drill.clues
         .map((_, i) => i)
-        .filter((i) => !drill.used[i] && solved(scenarios(drill, [...base, ...drill.clues.filter((__, j) => j !== i)])).length > 1);
+        .filter((i) => !drill.used[i] && solved(enumerate(drill, [...base, ...drill.clues.filter((__, j) => j !== i)], [])).length > 1);
       return { type: 'decide', decide: decisive, answer: all[0] };
     }
     case 'contra': {
@@ -145,11 +288,11 @@ export function computeAnswer(drill: Drill): Answer {
       const td = drill.td;
       const rv = drill.rv;
       if (c === null || td === null || rv === null) throw new Error(`${drill.id}: contra sin hipótesis o sin regla del crimen`);
-      const hyp = (rooms: Room[][]): boolean => rooms[c][td] === rv;
-      if (scenarios(drill, [...base, ...drill.clues], hyp).length > 0) throw new Error(`${drill.id}: la hipótesis no se rompe con todas las pistas`);
+      const hyp: Clue = { k: 'at', c, t: td, r: rv };
+      if (enumerate(drill, [...base, ...drill.clues, hyp], []).length > 0) throw new Error(`${drill.id}: la hipótesis no se rompe con todas las pistas`);
       const decisive = drill.clues
         .map((_, i) => i)
-        .filter((i) => !drill.used[i] && scenarios(drill, [...base, ...drill.clues.filter((__, j) => j !== i)], hyp).length > 0);
+        .filter((i) => !drill.used[i] && enumerate(drill, [...base, ...drill.clues.filter((__, j) => j !== i), hyp], []).length > 0);
       return { type: 'decide', decide: decisive, answer: null };
     }
   }

@@ -3,7 +3,8 @@
 import { todayKey } from '../../game/modes';
 import { isFirstTime, techOfDay, withAnswer, withReview, withSession, type DayTech, type Level } from './adapt';
 import { planSession, summarize, type SessionKind } from './compose';
-import { DRILLS } from './drills';
+import type { BankDrill } from './drills';
+import { loadDrillBank } from './load';
 import { loadGymProgress, saveGymProgress, techProgress, type GymProgress } from './progress';
 import type { Tech } from './types';
 import { renderGymIntro } from './ui/intro';
@@ -29,6 +30,9 @@ export function mountAcademy(root: HTMLElement, actions: AcademyActions): () => 
     stop();
     stop = mount();
   };
+  let alive = true;
+  // El banco generado se pide al entrar; mientras llega, la entrada ya se ve.
+  const bank = loadDrillBank();
   const focus: DayTech | 'remates' | undefined = actions.focus === 'remate' ? 'remates' : actions.focus;
 
   function dayTech(progress: GymProgress): { tech: DayTech; why: string } {
@@ -48,8 +52,14 @@ export function mountAcademy(root: HTMLElement, actions: AcademyActions): () => 
   }
 
   function start(kind: SessionKind): void {
+    void bank.then((drills) => {
+      if (alive) play(drills, kind);
+    });
+  }
+
+  function play(drills: BankDrill[], kind: SessionKind): void {
     const before = loadGymProgress();
-    const plan = planSession(DRILLS, before, kind, dayTech(before).tech);
+    const plan = planSession(drills, before, kind, dayTech(before).tech);
     // Lo servido se apunta al empezar: salir a mitad no hace que vuelvan los mismos.
     saveGymProgress(plan.progress);
     show(() =>
@@ -86,5 +96,8 @@ export function mountAcademy(root: HTMLElement, actions: AcademyActions): () => 
 
   if (focus === 'remates') start('remates');
   else intro();
-  return () => stop();
+  return () => {
+    alive = false;
+    stop();
+  };
 }

@@ -22,22 +22,23 @@ export type DayTech = (typeof DAY_TECHS)[number];
 export type Level = 1 | 2 | 3;
 
 /**
- * Nivel de un ejercicio según la tabla de MODOS 3.6: 3 si hay hipótesis o tres pistas
- * o más; 2 si hay dos pistas, o un salto de dos horas; 1 en otro caso. Cuentan las
- * pistas que hay que usar: lo que se sabe, los hechos y, en los remates, las pistas
- * que aún no se han usado.
+ * Nivel de un ejercicio según la tabla de MODOS 3.6: 3 si hay hipótesis (`contra`) o
+ * tres pistas o más; 2 si hay dos, o un salto de dos horas; 1 en otro caso. Cuentan las
+ * pistas que hay que usar: lo que se sabe, los hechos y, en los remates de tipo `clue`,
+ * la pista decisiva (las tachadas y las que solo distraen no). El salto de dos horas
+ * suma como una pista más: dos pistas y dos saltos ya es una cadena de nivel 3.
  */
 export function drillLevel(drill: Drill): Level {
   if (drill.type === 'contra') return 3;
-  const clues = drill.given.length + drill.facts.length + drill.clues.filter((_, i) => !drill.used[i]).length;
-  if (clues >= 3) return 3;
+  const clues = drill.given.length + drill.facts.length + (drill.type === 'clue' ? 1 : 0);
   let hops = 1;
   const ask = drill.ask;
   if (drill.type === 'reach' && ask && ask.c !== null && ask.t !== null) {
     const { c, t } = ask;
     for (const k of [...drill.given, ...drill.facts]) if (k.k === 'at' && k.c === c) hops = Math.max(hops, Math.abs(k.t - t));
   }
-  return clues === 2 || hops >= 2 ? 2 : 1;
+  const weight = clues + (hops >= 2 ? 1 : 0);
+  return weight >= 3 ? 3 : weight === 2 ? 2 : 1;
 }
 
 /** Acierto (0 a 1) en los últimos 20, o null si no hay respuestas. */

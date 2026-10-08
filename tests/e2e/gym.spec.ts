@@ -25,7 +25,7 @@ async function openAcademy(page: Page): Promise<void> {
   await expect(page).toHaveURL(/#academia$/);
 }
 
-test('sesión completa: 3 bloques, 13 ejercicios con corrección, informe y "Ir a jugar un caso"', async ({ page }) => {
+test('sesión completa: 3 bloques con corrección, informe y "Ir a jugar un caso"', async ({ page }) => {
   await openAcademy(page);
   await expect(page.getByText('Academia de Policía de Valdeniebla')).toBeVisible();
   await expect(page.locator('.gym-ficha li')).toHaveCount(4);
@@ -34,14 +34,17 @@ test('sesión completa: 3 bloques, 13 ejercicios con corrección, informe y "Ir 
   await expect(page.locator('.gym-ficha .glevel').first()).toHaveText('Nivel 1');
   await page.getByRole('button', { name: 'Empezar el calentamiento' }).click();
 
-  for (let i = 0; i < 13; i++) {
+  // Primera vez: diagnóstico, 8 de activación (2 por técnica) + 5 + 3.
+  let total = 0;
+  for (let i = 0; i === 0 || i < total; i++) {
     // Pantalla breve antes de cada bloque.
     const inter = page.locator('#gGo');
     if (await inter.isVisible()) {
       await expect(page.locator('.gym-inter .gk')).toContainText('Bloque');
       await inter.click();
     }
-    await expect(page.locator('.gym-prog span')).toContainText(`Ejercicio ${i + 1} de 13`);
+    await expect(page.locator('.gym-prog span')).toContainText(`Ejercicio ${i + 1} de `);
+    if (i === 0) total = Number((await page.locator('.gym-prog span').textContent())?.match(/de (\d+)/)?.[1]);
 
     if (i === 0) {
       // Primer ejercicio (Bruno en la Cocina a las 21:00): se responde bien tocando salas,
@@ -62,7 +65,8 @@ test('sesión completa: 3 bloques, 13 ejercicios con corrección, informe y "Ir 
     await page.locator('#gNext').click();
   }
 
-  await expect(page.locator('.gym-end .score')).toHaveText(/^\d+ de 13$/);
+  expect(total).toBe(16);
+  await expect(page.locator('.gym-end .score')).toHaveText(new RegExp(`^\\d+ de ${total}$`));
   await expect(page.locator('.gym-end .g-rows').first().locator('li')).toHaveCount(3);
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('hm2:gym') ?? '{}'));
   expect(stored.sessions).toHaveLength(1);

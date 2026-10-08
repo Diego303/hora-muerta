@@ -189,12 +189,12 @@ Cada fase se cierra con `pnpm typecheck`, `pnpm lint`, `pnpm test` (y `pnpm test
 - **Hecho cuando:** criterio 3.13 (3).
 
 ### F6 · Banco de ejercicios generado
-- [ ] `scripts/build-drills.ts` a partir de `solveHuman`, según la tabla 3.8. Los `tri` "no se sabe" se verifican con el solver exacto.
-- [ ] Nivel automático; filtros de calidad (como mucho 4 pistas en "Lo que sabes", 6 en remates).
-- [ ] Explicaciones con `engine/text.ts` y el Apéndice C, en tono "tú".
-- [ ] `scripts/validate-drills.ts`: reverifica cada respuesta.
-- [ ] Unos 360 ejercicios validados (o los que resulten con D4).
-- [ ] Muestra de 10 ejercicios por técnica para que la revises.
+- [x] `scripts/build-drills.ts` a partir de `solveHuman`, según la tabla 3.8. Los `tri` "no se sabe" se verifican con el solver exacto.
+- [x] Nivel automático; filtros de calidad (como mucho 4 pistas en "Lo que sabes", 6 en remates).
+- [x] Explicaciones con `engine/text.ts` y el Apéndice C, en tono "tú".
+- [x] `scripts/validate-drills.ts`: reverifica cada respuesta.
+- [x] Unos 360 ejercicios validados (o los que resulten con D4).
+- [x] Muestra de 10 ejercicios por técnica para que la revises.
 - **Puede empezar ya:** M2 está cerrado. Es independiente de F1 a F5.
 
 ### F7 · Calidad

@@ -13,6 +13,7 @@
     "bank:build": "tsx scripts/build-bank.ts",
     "bank:validate": "tsx scripts/validate-bank.ts",
     "bank:report": "tsx scripts/bank-report.ts",
+    "drills:build": "tsx scripts/build-drills.ts",
     "drills:validate": "tsx scripts/validate-drills.ts"
   },
   "dependencies": {

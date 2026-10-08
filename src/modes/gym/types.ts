@@ -6,7 +6,7 @@
 // - Drill: la forma normalizada (índices), la que usan el verificador, la corrección y
 //   el reproductor. La produce normalize.ts.
 import type { ClueTextContext } from '../../engine/text';
-import type { Clue, FloorPlan, Obj, Room, Sus } from '../../engine/types';
+import type { Clue, FloorPlan, MapId, Obj, Room, Sus } from '../../engine/types';
 
 export type Tech = 'alcance' | 'seguro' | 'tabla' | 'remate';
 export type DrillType = 'reach' | 'tri' | 'pick' | 'clue' | 'contra';
@@ -111,3 +111,46 @@ export type Reply =
   | { type: 'tri'; value: Tri }
   | { type: 'pick'; value: number | 'NS' }
   | { type: 'decide'; pick: number };
+
+/**
+ * Ejercicio generado, tal como se guarda en public/drills.json (MODOS 3.7), ya con
+ * índices: personas en el reparto global (CAST), objetos en OBJECTS, salas y horas del
+ * plano. A diferencia del esquema de 3.7, la respuesta se guarda en la forma
+ * normalizada (`Answer`), y la explicación con marcas compactas en vez de HTML:
+ * {c:N} persona, {r:N} sala, {o:N} objeto y {t:HH:MM} hora (las expande `drillFromDef`).
+ */
+export interface DrillDef {
+  id: string;
+  tech: Tech;
+  type: DrillType;
+  level: 1 | 2 | 3;
+  map: MapId | null;
+  T: number;
+  cast: number[];
+  objs: number[];
+  given: Clue[];
+  facts: Clue[];
+  clues: Clue[];
+  used: boolean[];
+  stmt: Statement | null;
+  ask: Drill['ask'];
+  rv: Room | null;
+  td: number | null;
+  hyp: Sus | null;
+  decide: Drill['decide'];
+  show: Drill['show'];
+  prompt: string;
+  context: string;
+  explain: string;
+  answer: Answer;
+  /** De dónde sale: caso y paso de la cadena crítica (para revisar). */
+  src: string;
+}
+
+/** Como se escribe en public/drills.json: sin los campos vacíos (ver `packDef`/`unpackDef`). */
+export type PackedDrillDef = Pick<DrillDef, 'id' | 'tech' | 'type' | 'level' | 'map' | 'T' | 'cast' | 'explain' | 'answer' | 'src'> & Partial<DrillDef>;
+
+export interface DrillBankFile {
+  version: string;
+  drills: PackedDrillDef[];
+}

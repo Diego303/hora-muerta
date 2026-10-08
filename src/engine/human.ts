@@ -66,6 +66,80 @@ const MAX_HYPOTHESIS_STEPS = 12;
  * se atasca (el caso no sirve: exige adivinar).
  */
 export function solveHuman(ctx: HumanContext, clues: Clue[]): HumanSolution | null {
+  const { state, steps, candSteps, carrySteps, commit, isDone, isContradiction, LEVELS } = humanCore(ctx, clues, true);
+
+  while (!isDone()) {
+    if (isContradiction()) return null;
+    let applied = false;
+    for (const level of LEVELS) {
+      for (const rule of level) {
+        if (rule()) {
+          applied = true;
+          break;
+        }
+      }
+      if (applied) break;
+    }
+    if (!applied) return null; // atascado: el caso exige más de lo que el solver humano sabe hacer
+  }
+
+  // Cierre (§Apéndice D, pasos 10-11: R5_SUS_SINGLE y luego, aparte, R5_WEAPON).
+  const culprit = singleBit(state.cand);
+  const weapon = singleBit(state.carry[culprit]);
+  // Solo concluye el arma, no "culprit" de nuevo (eso ya lo concluyó un paso
+  // anterior): si repitiera "culprit" aquí, esta cadena de premisas —que
+  // incluye la eliminación de objetos— se colaría en culpritIndices y volvería
+  // a inflar el nivel máximo (ver comentario más abajo).
+  commit(5, 'R5_WEAPON', [], [{ k: 'carry', c: culprit, o: weapon }], candSteps.concat(carrySteps[culprit]));
+
+  // El Apéndice D distingue la cadena completa (11 pasos, incluidos los que solo
+  // determinan el arma tras conocer ya al culpable) de "el nivel máximo" y la
+  // puntuación, que solo cuentan la parte que identifica AL CULPABLE (pasos 1-5
+  // en ese ejemplo: puntuación 1+4+2+6+2=15, nivel máximo 4, aunque los pasos
+  // 10-11 sean de nivel 5). Ver docs/DECISIONES.md.
+  const { fullIndices, culpritIndices } = markCriticalChain(steps, culprit, weapon);
+  for (const i of fullIndices) steps[i].crit = true;
+
+  const culpritSteps = culpritIndices.map((i) => steps[i]);
+  const score = culpritSteps.reduce((sum, step) => sum + LEVEL_WEIGHT[step.lv], 0);
+  const maxLv = culpritSteps.reduce<1 | 2 | 3 | 4 | 5 | 6>((max, step) => (step.lv > max ? step.lv : max), 1);
+  const maxLvStepCount = culpritSteps.filter((step) => step.lv === maxLv).length;
+  const key = pickKeyStep(culpritIndices, steps, culprit);
+  const arch = detectArchetypes(culpritIndices, steps, key);
+
+  return { steps, score, maxLv, maxLvStepCount, key, arch };
+}
+
+export interface HumanPropagation {
+  /** Todos los pasos, en orden. */
+  steps: Step[];
+  poss: number[][];
+  carry: number[];
+  cand: number;
+  contradiction: boolean;
+}
+
+/**
+ * Aplica las reglas del solver humano (niveles 1 a 5, sin hipótesis) hasta que ninguna
+ * avanza, sin exigir que el caso quede resuelto. Para los ejercicios del calentamiento
+ * (docs/MODOS.md 3.8), que son mundos pequeños donde no siempre hay crimen: con
+ * `crime: false` no se aplica la regla del crimen y `rv`/`td` no se usan.
+ */
+export function propagateHuman(ctx: HumanContext, clues: Clue[], options: { crime: boolean }): HumanPropagation {
+  const core = humanCore(ctx, clues, options.crime);
+  const levels = options.crime ? core.BASE_LEVELS : core.LEVELS;
+  let contradiction = core.isContradiction();
+  while (!contradiction) {
+    const applied = levels.some((level) => level.some((rule) => rule()));
+    if (!applied) break;
+    contradiction = core.isContradiction();
+  }
+  return { steps: core.steps, poss: core.state.poss, carry: core.state.carry, cand: core.state.cand, contradiction };
+}
+
+/** Estado, reglas y pasos del solver humano. `crime`: si se aplica la regla del crimen
+ * (nivel 2 y la hipótesis sobre el culpable); sin ella quedan los niveles 1, 3, 4 y 5. */
+function humanCore(ctx: HumanContext, clues: Clue[], crime: boolean) {
   const roomCount = ctx.graph.adj.length;
   const allRooms = fullMask(roomCount);
   const allSus = fullMask(ctx.N);
@@ -773,49 +847,10 @@ export function solveHuman(ctx: HumanContext, clues: Clue[]): HumanSolution | nu
     return false;
   }
 
-  const LEVELS: (() => boolean)[][] = [...BASE_LEVELS, [ruleR6HypCulprit, ruleR6HypCell]];
-
-  while (!isDone()) {
-    if (isContradiction()) return null;
-    let applied = false;
-    for (const level of LEVELS) {
-      for (const rule of level) {
-        if (rule()) {
-          applied = true;
-          break;
-        }
-      }
-      if (applied) break;
-    }
-    if (!applied) return null; // atascado: el caso exige más de lo que el solver humano sabe hacer
-  }
-
-  // Cierre (§Apéndice D, pasos 10-11: R5_SUS_SINGLE y luego, aparte, R5_WEAPON).
-  const culprit = singleBit(state.cand);
-  const weapon = singleBit(state.carry[culprit]);
-  // Solo concluye el arma, no "culprit" de nuevo (eso ya lo concluyó un paso
-  // anterior): si repitiera "culprit" aquí, esta cadena de premisas —que
-  // incluye la eliminación de objetos— se colaría en culpritIndices y volvería
-  // a inflar el nivel máximo (ver comentario más abajo).
-  commit(5, 'R5_WEAPON', [], [{ k: 'carry', c: culprit, o: weapon }], candSteps.concat(carrySteps[culprit]));
-
-  // El Apéndice D distingue la cadena completa (11 pasos, incluidos los que solo
-  // determinan el arma tras conocer ya al culpable) de "el nivel máximo" y la
-  // puntuación, que solo cuentan la parte que identifica AL CULPABLE (pasos 1-5
-  // en ese ejemplo: puntuación 1+4+2+6+2=15, nivel máximo 4, aunque los pasos
-  // 10-11 sean de nivel 5). Ver docs/DECISIONES.md.
-  const { fullIndices, culpritIndices } = markCriticalChain(steps, culprit, weapon);
-  for (const i of fullIndices) steps[i].crit = true;
-
-  const culpritSteps = culpritIndices.map((i) => steps[i]);
-  const score = culpritSteps.reduce((sum, step) => sum + LEVEL_WEIGHT[step.lv], 0);
-  const maxLv = culpritSteps.reduce<1 | 2 | 3 | 4 | 5 | 6>((max, step) => (step.lv > max ? step.lv : max), 1);
-  const maxLvStepCount = culpritSteps.filter((step) => step.lv === maxLv).length;
-  const key = pickKeyStep(culpritIndices, steps, culprit);
-  const arch = detectArchetypes(culpritIndices, steps, key);
-
-  return { steps, score, maxLv, maxLvStepCount, key, arch };
+  const LEVELS: (() => boolean)[][] = crime ? [...BASE_LEVELS, [ruleR6HypCulprit, ruleR6HypCell]] : BASE_LEVELS.filter((_, i) => i !== 1);
+  return { state, steps, candSteps, carrySteps, commit, isDone, isContradiction, LEVELS, BASE_LEVELS };
 }
+
 
 /** Cadena crítica (§9.4): desde los pasos que fijan culpable/arma, hacia atrás por las premisas. */
 function reachableBackward(steps: Step[], isTerminal: (step: Step) => boolean): number[] {

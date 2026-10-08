@@ -3,27 +3,30 @@
 export interface CastMember {
   name: string;
   role: string;
+  /** Mujer: para la concordancia de las explicaciones ("la culpable", "juntas"). No se
+   * deduce del papel: "el ama de llaves" es Adela. */
+  fem?: true;
 }
 
 /** Reparto completo, ya en orden alfabético (las 18 iniciales son distintas). */
 export const CAST: CastMember[] = [
-  { name: 'Adela', role: 'el ama de llaves' },
+  { name: 'Adela', role: 'el ama de llaves', fem: true },
   { name: 'Bruno', role: 'el sobrino' },
-  { name: 'Celia', role: 'la pianista' },
+  { name: 'Celia', role: 'la pianista', fem: true },
   { name: 'Darío', role: 'el chófer' },
-  { name: 'Elena', role: 'la doctora' },
+  { name: 'Elena', role: 'la doctora', fem: true },
   { name: 'Fausto', role: 'el notario' },
-  { name: 'Greta', role: 'la fotógrafa' },
+  { name: 'Greta', role: 'la fotógrafa', fem: true },
   { name: 'Hugo', role: 'el jardinero' },
-  { name: 'Irene', role: 'la heredera' },
+  { name: 'Irene', role: 'la heredera', fem: true },
   { name: 'Julián', role: 'el coronel' },
-  { name: 'Lola', role: 'la periodista' },
+  { name: 'Lola', role: 'la periodista', fem: true },
   { name: 'Mateo', role: 'el cocinero' },
-  { name: 'Nuria', role: 'la restauradora' },
+  { name: 'Nuria', role: 'la restauradora', fem: true },
   { name: 'Octavio', role: 'el marchante' },
-  { name: 'Paula', role: 'la secretaria' },
+  { name: 'Paula', role: 'la secretaria', fem: true },
   { name: 'Rómulo', role: 'el mayordomo' },
-  { name: 'Sara', role: 'la botánica' },
+  { name: 'Sara', role: 'la botánica', fem: true },
   { name: 'Tomás', role: 'el socio' },
 ];
 
